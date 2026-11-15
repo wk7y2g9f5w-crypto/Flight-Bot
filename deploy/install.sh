@@ -50,6 +50,7 @@ Type=simple
 User=$USER
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$APP_DIR/.env
+Environment=PYTHONUNBUFFERED=1
 ExecStart=$APP_DIR/.venv/bin/python -m src.bot
 Restart=always
 RestartSec=10
