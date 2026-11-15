@@ -92,7 +92,7 @@ on the Always Free tier instead: 1 vCPU / 1 GB RAM, $0 forever.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 cp .env.example .env   # then put your token and guild ID in .env
-.venv/bin/python src/bot.py
+.venv/bin/python -m src.bot
 ```
 
 Run the tests with:

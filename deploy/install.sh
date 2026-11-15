@@ -50,7 +50,7 @@ Type=simple
 User=$USER
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$APP_DIR/.env
-ExecStart=$APP_DIR/.venv/bin/python src/bot.py
+ExecStart=$APP_DIR/.venv/bin/python -m src.bot
 Restart=always
 RestartSec=10
 
