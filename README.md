@@ -30,15 +30,13 @@ Members can update their info anytime by running `/profile` again.
 Profiles are stored in a small SQLite database file. Nothing else is
 stored, and nothing leaves the server.
 
-## Setup (Cayden — about 15 minutes)
-
-### 1. Create the bot in the Discord Developer Portal
+## Setup — create the bot in Discord (needed whatever the host is)
 
 1. Go to <https://discord.com/developers/applications> and sign in.
 2. Click **New Application**, name it `GGA Profile Bot`, click Create.
 3. On the left, click **Bot**, then **Reset Token** and copy the token.
    Keep it private — it is the bot's password. (If it ever leaks,
-   reset it here and update the copy on Render.)
+   reset it here and update the copy wherever the bot runs.)
 4. On the same Bot page, scroll to **Privileged Gateway Intents** and
    turn on **Server Members Intent**. The welcome DM needs this.
 5. On the left, click **OAuth2 → URL Generator**. Tick the scopes
@@ -46,14 +44,39 @@ stored, and nothing leaves the server.
    **Send Messages**. Copy the URL at the bottom, open it, and pick the
    GGA server to add the bot.
 
-### 2. Deploy on Render
+## Hosting — Google Cloud free VM (current plan)
+
+Render can't create the paid worker until Dec 1, 2026 (card removed
+from the workspace), so the bot runs on a Google Cloud e2-micro VM
+on the Always Free tier instead: 1 vCPU / 1 GB RAM, $0 forever.
+
+1. In the Google Cloud console, create a VM with these exact settings
+   so it stays inside the free tier:
+   - Region: **us-west1** (Oregon), zone us-west1-a
+   - Machine type: **e2-micro**
+   - Boot disk: Debian 12, **30 GB standard persistent disk**
+   - Everything else default. No inbound firewall rules needed —
+     the bot only talks out to Discord.
+2. Click **SSH** on the VM to open a terminal, then run:
+   ```bash
+   git clone https://github.com/wk7y2g9f5w-crypto/Flight-Bot.git
+   cd Flight-Bot && bash deploy/install.sh
+   ```
+   The script installs Python, sets up the bot at
+   `/opt/gga-profile-bot`, asks for the Discord token and server ID
+   (typed in hidden), and installs a systemd service so the bot
+   starts on boot and restarts if it crashes.
+3. Check the logs: `sudo journalctl -u gga-profile-bot -f` — look for
+   `Logged in as GGA Profile Bot`.
+
+## Hosting — Render (plan B, from Dec 1, 2026)
 
 1. Push this folder to a GitHub repo (or use the "New +" → "Background
    Worker" → "Build and deploy from a Git repository" flow in Render).
 2. Render reads `render.yaml` in this folder: it creates a background
    worker called `gga-profile-bot` with a 1 GB disk for the database.
 3. In the Render dashboard, open the service → **Environment** and set:
-   - `DISCORD_TOKEN` — the token from step 1.
+   - `DISCORD_TOKEN` — the token from the Discord setup above.
    - `GUILD_ID` — the GGA server's ID. This makes the `/profile` and
      `/roster` commands show up instantly. To find it: in Discord,
      turn on Developer Mode (Settings → Advanced), right-click the
