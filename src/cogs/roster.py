@@ -9,12 +9,9 @@ from discord import app_commands
 from discord.ext import commands
 
 from src import config, db
+from src.validation import format_handicap
 
 MAX_ENTRIES = 20
-
-
-def _format_handicap(handicap) -> str:
-    return f"{handicap:g}" if handicap is not None else "—"
 
 
 class RosterCog(commands.Cog):
@@ -68,7 +65,7 @@ class RosterCog(commands.Cog):
                 f"**{p['display_name']}** — Golf+ {p['golfplus_username'] or '—'} | "
                 f"{p['timezone'] or '—'} | "
                 f"{p['available_time'] or '—'} | "
-                f"HCP {_format_handicap(p['handicap'])} | {p['preferred_tour']}"
+                f"HCP {format_handicap(p['handicap'])} | {p['preferred_tour']}"
             )
         embed = discord.Embed(
             title=f"GGA member roster ({len(profiles)} saved)",

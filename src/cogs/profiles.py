@@ -13,7 +13,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from src import config, db
-from src.validation import VALID_TOURS, parse_handicap
+from src.validation import VALID_TOURS, format_handicap, parse_handicap
 
 
 class ProfileModal(discord.ui.Modal):
@@ -46,8 +46,8 @@ class ProfileModal(discord.ui.Modal):
         existing_handicap = (existing or {}).get("handicap")
         self.handicap_input = discord.ui.TextInput(
             label="Golf+ Handicap",
-            placeholder="e.g. 12 or 12.5 (use -2 for a plus-handicap)",
-            default="" if existing_handicap is None else f"{existing_handicap:g}",
+            placeholder="e.g. 12 or 12.5 (use +2 for a plus-handicap)",
+            default="" if existing_handicap is None else format_handicap(existing_handicap),
             required=True,
             max_length=16,
         )
@@ -88,7 +88,7 @@ class ProfileModal(discord.ui.Modal):
             value=self.time_input.value.strip(),
             inline=False,
         )
-        embed.add_field(name="Golf+ Handicap", value=f"{handicap:g}", inline=True)
+        embed.add_field(name="Golf+ Handicap", value=format_handicap(handicap), inline=True)
         embed.add_field(name="Preferred Tour", value=self.tour, inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 

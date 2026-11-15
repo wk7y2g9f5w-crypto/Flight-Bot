@@ -15,8 +15,9 @@ MAX_HANDICAP = 54.0
 def parse_handicap(raw: str) -> float:
     """Parse a Golf+ handicap string.
 
-    Accepts whole numbers ("12"), decimals ("12.5") and negatives for
-    plus-handicaps ("-2"). Returns the value as a float.
+    Accepts whole numbers ("12"), decimals ("12.5") and plus-handicaps
+    ("+7" or "-7" — a plus-handicap is stored as a negative number, so
+    a +7 player is kept as -7.0). Returns the value as a float.
 
     Raises ValueError with a plain-language message for anything else.
     """
@@ -31,11 +32,31 @@ def parse_handicap(raw: str) -> float:
         ) from None
     if not math.isfinite(value):
         raise ValueError(f'"{text}" is not a valid handicap.')
+    if text.startswith("+"):
+        # "+7" is a plus-handicap: 7 strokes better than scratch.
+        value = -abs(value)
+    if value == 0:
+        value = 0.0
     if value < MIN_HANDICAP or value > MAX_HANDICAP:
         raise ValueError(
             f"Handicap must be between {MIN_HANDICAP:g} and {MAX_HANDICAP:g}."
         )
     return value
+
+
+def format_handicap(handicap) -> str:
+    """Display a stored handicap the way golfers write it.
+
+    Plus-handicaps (stored negative) show with a "+" ("+7"); scratch
+    shows "0"; anything else shows the plain number ("12.5").
+    """
+    if handicap is None:
+        return "—"
+    if handicap == 0:
+        return "0"
+    if handicap < 0:
+        return f"+{-handicap:g}"
+    return f"{handicap:g}"
 
 
 def normalize_tour(raw: str) -> str:

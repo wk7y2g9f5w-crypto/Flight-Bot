@@ -47,6 +47,12 @@ def test_profile_modal_prefills_existing_values():
     assert values["Golf+ Handicap"] == "12.5"
 
 
+def test_profile_modal_prefills_plus_handicap_with_plus_sign():
+    modal = profiles_cog.ProfileModal(tour="ProTour", existing={"handicap": -7.0})
+    values = {child.label: child.default for child in modal.children}
+    assert values["Golf+ Handicap"] == "+7"
+
+
 def test_profile_setup_view_preselects_current_tour():
     view = profiles_cog.ProfileSetupView(existing={"preferred_tour": "Both"})
     assert view.tour == "Both"

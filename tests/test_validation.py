@@ -1,7 +1,7 @@
 """Handicap and tour validation."""
 import pytest
 
-from src.validation import normalize_tour, parse_handicap
+from src.validation import format_handicap, normalize_tour, parse_handicap
 
 
 @pytest.mark.parametrize(
@@ -11,10 +11,14 @@ from src.validation import normalize_tour, parse_handicap
         ("12.5", 12.5),
         ("0", 0.0),
         ("-2", -2.0),
+        ("-7", -7.0),
         ("-10", -10.0),
         ("54", 54.0),
         ("  18.5  ", 18.5),
-        ("+3", 3.0),
+        ("+3", -3.0),
+        ("+7", -7.0),
+        ("+0", 0.0),
+        ("+0.5", -0.5),
     ],
 )
 def test_parse_handicap_accepts(raw, expected):
@@ -23,11 +27,26 @@ def test_parse_handicap_accepts(raw, expected):
 
 @pytest.mark.parametrize(
     "raw",
-    ["", "   ", "abc", "100", "54.5", "-11", "12.5.3", "NaN", "inf", "twelve"],
+    ["", "   ", "abc", "100", "54.5", "-11", "+11", "12.5.3", "NaN", "inf", "twelve"],
 )
 def test_parse_handicap_rejects(raw):
     with pytest.raises(ValueError):
         parse_handicap(raw)
+
+
+@pytest.mark.parametrize(
+    "handicap,expected",
+    [
+        (12.5, "12.5"),
+        (0.0, "0"),
+        (-0.0, "0"),
+        (-2.0, "+2"),
+        (-7.0, "+7"),
+        (None, "—"),
+    ],
+)
+def test_format_handicap(handicap, expected):
+    assert format_handicap(handicap) == expected
 
 
 @pytest.mark.parametrize(
