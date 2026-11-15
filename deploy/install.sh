@@ -60,7 +60,10 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now gga-profile-bot
+sudo systemctl enable gga-profile-bot
+# Restart (not just start): on a re-deploy the old process is already
+# running, and `enable --now` would leave it on the old code.
+sudo systemctl restart gga-profile-bot
 sleep 3
 sudo systemctl status gga-profile-bot --no-pager | head -20 || true
 echo
