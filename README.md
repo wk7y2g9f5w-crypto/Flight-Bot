@@ -8,7 +8,10 @@ from every member so the crew can build flights and TeamGolf squads:
 3. **Golf+ Handicap** — so flights stay fair
 4. **Preferred Tour** — ProTour, Accessible, or Both
 
-Members can update their info anytime by running `/profile` again.
+Members can update their info anytime by running `/profile` again — or
+by tapping the **Set Up Your Profile** button, if a crew/admin has
+posted it in a channel (see `/post-profile-button` below). Both open
+the same form.
 
 ## What the bot does
 
@@ -22,6 +25,12 @@ Members can update their info anytime by running `/profile` again.
   current answers. (The Golf+ username is optional; the handicap is
   required.) Profiles saved before structured times keep their old
   free-text entry until the member re-saves.
+- **`/post-profile-button`** — crew/admins only. Posts a persistent
+  **Set Up Your Profile** button in the channel where you run it, for
+  members who struggle with typing the command. Tapping the button
+  sends that member the same setup form `/profile` sends. The button
+  keeps working across bot restarts. If the message is ever deleted,
+  run the command again to post a fresh one.
 - **`/roster`** — crew/admins only. Lists everyone's saved profiles
   (name, Golf+ username, timezone, playing time shown in Eastern Time,
   handicap, tour). You can narrow it down by tour or by timezone. Only
@@ -86,7 +95,7 @@ on the Always Free tier instead: 1 vCPU / 1 GB RAM, $0 forever.
      server name, Copy Server ID. You can leave it blank and the bot
      will register the commands globally instead, but that can take up
      to an hour to appear.
-4. Deploy. In the logs you should see `Synced 2 commands to guild ...`
+4. Deploy. In the logs you should see `Synced 3 commands to guild ...`
    and `Logged in as GGA Profile Bot ...`.
 
 ## Running it on your own computer (testing)
@@ -116,7 +125,8 @@ discord.py 2.7.1, aiosqlite, and pytest installed.)
 - `src/validation.py` — handicap and tour checks.
 - `src/availability.py` — playing-time parsing and conversion to
   Eastern Time.
-- `src/cogs/profiles.py` — the `/profile` command and form.
+- `src/cogs/profiles.py` — the `/profile` command and form, the
+  persistent setup button, and `/post-profile-button`.
 - `src/cogs/roster.py` — the `/roster` command for crew/admins.
 - `src/cogs/welcome.py` — the welcome DM for new members.
 - `tests/` — pytest tests for the database, validation, availability

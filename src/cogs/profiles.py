@@ -8,6 +8,11 @@ separate step): /profile sends an ephemeral message with a tour select and
 a button. The button opens the modal for the five text fields. Submitting
 the modal saves everything at once.
 
+Some members struggle with typing the command, so a crew/admin can also
+post a persistent "Set Up Your Profile" button in a channel
+(/post-profile-button). Tapping it sends the member the same ephemeral
+setup message /profile sends — no typing, no command menu.
+
 Playing time is structured, not free text: the member enters the days
 they usually play and a start–end window in their own timezone, and the
 bot converts the window to Eastern Time for the roster. A modal holds at
@@ -196,6 +201,59 @@ class ProfileSetupView(discord.ui.View):
         )
 
 
+class ProfileButtonView(discord.ui.View):
+    """Persistent "Set Up Your Profile" button for a channel message.
+
+    timeout=None plus a fixed custom_id so the button keeps working
+    across bot restarts (re-registered in setup_hook). Tapping it sends
+    the member the same ephemeral setup message /profile sends.
+    """
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Set Up Your Profile",
+        style=discord.ButtonStyle.primary,
+        custom_id="gga_profile_setup_button",
+    )
+    async def open_setup(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        await send_profile_setup(interaction)
+
+
+async def send_profile_setup(interaction: discord.Interaction) -> None:
+    """Send the ephemeral setup message (tour picker + open-modal button).
+
+    Shared by /profile and the persistent setup button, so both open
+    exactly the same form.
+    """
+    existing = await db.get_profile(config.DB_PATH, interaction.user.id)
+    message = (
+        "Set your GGA profile — pick your tour, then fill in the details. "
+        "You can run /profile again anytime to change it."
+    )
+    if (
+        existing
+        and existing.get("avail_start_min") is None
+        and existing.get("available_time")
+    ):
+        # Saved before structured times: the old free-text entry
+        # cannot be split into days + a window, so ask them to
+        # re-enter it instead of silently dropping it.
+        message += (
+            f"\n\nYour current playing time is saved as "
+            f'"{existing["available_time"]}" — re-enter it below as '
+            "days + a time window."
+        )
+    await interaction.response.send_message(
+        message,
+        view=ProfileSetupView(existing=existing),
+        ephemeral=True,
+    )
+
+
 class ProfilesCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -205,27 +263,41 @@ class ProfilesCog(commands.Cog):
         description="Set or update your Golf+ username, timezone, playing time, handicap, and tour.",
     )
     async def profile(self, interaction: discord.Interaction) -> None:
-        existing = await db.get_profile(config.DB_PATH, interaction.user.id)
-        message = (
-            "Set your GGA profile — pick your tour, then fill in the details. "
-            "You can run /profile again anytime to change it."
-        )
-        if (
-            existing
-            and existing.get("avail_start_min") is None
-            and existing.get("available_time")
-        ):
-            # Saved before structured times: the old free-text entry
-            # cannot be split into days + a window, so ask them to
-            # re-enter it instead of silently dropping it.
-            message += (
-                f"\n\nYour current playing time is saved as "
-                f'"{existing["available_time"]}" — re-enter it below as '
-                "days + a time window."
+        await send_profile_setup(interaction)
+
+    @app_commands.command(
+        name="post-profile-button",
+        description="Post the 'Set Up Your Profile' button in this channel (crew/admin only).",
+    )
+    @app_commands.guild_only()
+    async def post_profile_button(
+        self, interaction: discord.Interaction
+    ) -> None:
+        perms = interaction.user.guild_permissions  # type: ignore[union-attr]
+        if not (perms.administrator or perms.manage_guild):
+            await interaction.response.send_message(
+                "Only crew/admins can post the profile button.",
+                ephemeral=True,
             )
+            return
+        if interaction.channel is None:
+            await interaction.response.send_message(
+                "Could not find this channel — try again from a server channel.",
+                ephemeral=True,
+            )
+            return
+        embed = discord.Embed(
+            title="Set up your GGA profile",
+            description=(
+                "Tap the button below and fill in your Golf+ username, "
+                "timezone, playing time, handicap, and preferred tour. "
+                "It takes about a minute, and you can update it anytime."
+            ),
+            colour=discord.Colour.green(),
+        )
+        await interaction.channel.send(embed=embed, view=ProfileButtonView())
         await interaction.response.send_message(
-            message,
-            view=ProfileSetupView(existing=existing),
+            "Profile button posted in this channel.",
             ephemeral=True,
         )
 

@@ -3,6 +3,8 @@
 No login, no network — add_cog only, then check the slash commands
 registered on the command tree.
 """
+import asyncio
+
 import discord
 from discord.ext import commands
 
@@ -28,7 +30,7 @@ def test_all_cogs_load_and_register_commands():
 
     asyncio.run(_load())
     names = {cmd.name for cmd in bot.tree.get_commands()}
-    assert names == {"profile", "roster"}
+    assert names == {"profile", "roster", "post-profile-button"}
 
 
 def test_profile_modal_prefills_existing_values():
@@ -89,3 +91,113 @@ def test_profile_setup_view_preselects_current_tour():
 def test_profile_setup_view_without_existing_profile():
     view = profiles_cog.ProfileSetupView(existing=None)
     assert view.tour is None
+
+
+def test_profile_button_view_is_persistent():
+    # timeout=None + a fixed custom_id is what keeps the button working
+    # across bot restarts — the whole point of the persistent button.
+    view = profiles_cog.ProfileButtonView()
+    assert view.timeout is None
+    assert len(view.children) == 1
+    button = view.children[0]
+    assert isinstance(button, discord.ui.Button)
+    assert button.custom_id == "gga_profile_setup_button"
+    assert button.label == "Set Up Your Profile"
+    assert button.style == discord.ButtonStyle.primary
+
+
+class _FakeResponse:
+    def __init__(self):
+        self.sent = []
+
+    async def send_message(self, content=None, **kwargs):
+        self.sent.append((content, kwargs))
+
+
+class _FakeChannel:
+    def __init__(self):
+        self.sent = []
+
+    async def send(self, **kwargs):
+        self.sent.append(kwargs)
+
+
+class _FakePerms:
+    def __init__(self, administrator=False, manage_guild=False):
+        self.administrator = administrator
+        self.manage_guild = manage_guild
+
+
+class _FakeUser:
+    def __init__(self, perms=None):
+        self.id = 123
+        self.guild_permissions = perms or _FakePerms()
+
+
+class _FakeInteraction:
+    def __init__(self, perms=None):
+        self.user = _FakeUser(perms)
+        self.response = _FakeResponse()
+        self.channel = _FakeChannel()
+
+
+def test_profile_button_sends_setup_message(monkeypatch):
+    async def fake_get_profile(db_path, discord_id):
+        return None
+
+    monkeypatch.setattr(profiles_cog.db, "get_profile", fake_get_profile)
+    interaction = _FakeInteraction()
+    view = profiles_cog.ProfileButtonView()
+
+    async def _click():
+        await view.children[0].callback(interaction)
+
+    asyncio.run(_click())
+    assert len(interaction.response.sent) == 1
+    content, kwargs = interaction.response.sent[0]
+    assert "Set your GGA profile" in content
+    assert kwargs["ephemeral"] is True
+    assert isinstance(kwargs["view"], profiles_cog.ProfileSetupView)
+
+
+def test_profile_button_view_registers_as_persistent():
+    # Mirrors what setup_hook does: the view must land in
+    # persistent_views or the button dies on the next restart.
+    bot = make_bot()
+    bot.add_view(profiles_cog.ProfileButtonView())
+    assert len(bot.persistent_views) == 1
+
+
+def test_post_profile_button_posts_for_admin():
+    interaction = _FakeInteraction(perms=_FakePerms(manage_guild=True))
+    cog = profiles_cog.ProfilesCog(bot=None)
+
+    async def _run():
+        await profiles_cog.ProfilesCog.post_profile_button.callback(
+            cog, interaction
+        )
+
+    asyncio.run(_run())
+    assert len(interaction.channel.sent) == 1
+    posted = interaction.channel.sent[0]
+    assert isinstance(posted["view"], profiles_cog.ProfileButtonView)
+    assert posted["embed"].title == "Set up your GGA profile"
+    assert interaction.response.sent == [
+        ("Profile button posted in this channel.", {"ephemeral": True})
+    ]
+
+
+def test_post_profile_button_refuses_non_admin():
+    interaction = _FakeInteraction(perms=_FakePerms())
+    cog = profiles_cog.ProfilesCog(bot=None)
+
+    async def _run():
+        await profiles_cog.ProfilesCog.post_profile_button.callback(
+            cog, interaction
+        )
+
+    asyncio.run(_run())
+    assert interaction.channel.sent == []
+    assert interaction.response.sent == [
+        ("Only crew/admins can post the profile button.", {"ephemeral": True})
+    ]

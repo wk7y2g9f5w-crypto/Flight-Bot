@@ -12,6 +12,7 @@ import discord
 from discord.ext import commands
 
 from src import config, db
+from src.cogs import profiles as profiles_cog
 
 COGS = [
     "src.cogs.profiles",
@@ -39,6 +40,9 @@ class GGAProfileBot(commands.Bot):
         await db.init_db(self.db_path)
         for ext in COGS:
             await self.load_extension(ext)
+        # Persistent views must be re-registered on every startup or
+        # their buttons stop responding after a restart.
+        self.add_view(profiles_cog.ProfileButtonView())
         if config.GUILD_ID:
             guild = discord.Object(id=config.GUILD_ID)
             self.tree.copy_global_to(guild=guild)
