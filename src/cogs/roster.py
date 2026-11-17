@@ -24,7 +24,6 @@ class RosterCog(commands.Cog):
     )
     @app_commands.describe(
         tour="Only show members who prefer this tour.",
-        timezone="Only show members whose timezone contains this text.",
     )
     @app_commands.choices(
         tour=[
@@ -38,7 +37,6 @@ class RosterCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         tour: str | None = None,
-        timezone: str | None = None,
     ) -> None:
         perms = interaction.user.guild_permissions  # type: ignore[union-attr]
         if not (perms.administrator or perms.manage_guild):
@@ -50,7 +48,6 @@ class RosterCog(commands.Cog):
         profiles = await db.list_profiles(
             config.DB_PATH,
             tour=tour,
-            timezone=timezone.strip() if timezone else None,
         )
         if not profiles:
             await interaction.response.send_message(
@@ -63,7 +60,6 @@ class RosterCog(commands.Cog):
         for p in shown:
             lines.append(
                 f"**{p['display_name']}** — Golf+ {p['golfplus_username'] or '—'} | "
-                f"{p['timezone'] or '—'} | "
                 f"{p['available_time'] or '—'} | "
                 f"HCP {format_handicap(p['handicap'])} | {p['preferred_tour']}"
             )
@@ -75,7 +71,7 @@ class RosterCog(commands.Cog):
         if len(profiles) > MAX_ENTRIES:
             embed.set_footer(
                 text=f"Showing the first {MAX_ENTRIES} of {len(profiles)} — "
-                "narrow it down with the tour or timezone filter."
+                "narrow it down with the tour filter."
             )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 

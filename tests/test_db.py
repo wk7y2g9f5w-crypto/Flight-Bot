@@ -112,17 +112,17 @@ def test_upsert_updates_existing_profile(db_path):
 def test_list_filters(db_path):
     run(db.init_db(db_path))
     members = [
-        (1, "Amy", "America/Denver", "Evenings", 8.0, "ProTour"),
-        (2, "Ben", "America/New_York", "Mornings", 20.0, "Accessible"),
-        (3, "Cal", "America/Denver", "Weekends", None, "Both"),
+        (1, "Amy", "Evenings", 8.0, "ProTour"),
+        (2, "Ben", "Mornings", 20.0, "Accessible"),
+        (3, "Cal", "Weekends", None, "Both"),
     ]
-    for discord_id, name, tz, time, hcp, tour in members:
+    for discord_id, name, time, hcp, tour in members:
         run(
             db.upsert_profile(
                 db_path,
                 discord_id=discord_id,
                 display_name=name,
-                timezone=tz,
+                timezone="",
                 available_time=time,
                 handicap=hcp,
                 preferred_tour=tour,
@@ -132,11 +132,6 @@ def test_list_filters(db_path):
     assert [p["display_name"] for p in run(db.list_profiles(db_path, tour="ProTour"))] == [
         "Amy"
     ]
-    denver = run(db.list_profiles(db_path, timezone="denver"))
-    assert [p["display_name"] for p in denver] == ["Amy", "Cal"]
-    both = run(db.list_profiles(db_path, tour="Both", timezone="Denver"))
-    assert [p["display_name"] for p in both] == ["Cal"]
-    assert run(db.list_profiles(db_path, tour="Accessible", timezone="Denver")) == []
 
 
 def test_init_adds_username_column_to_old_database(db_path):

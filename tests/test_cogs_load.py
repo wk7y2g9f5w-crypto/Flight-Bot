@@ -45,12 +45,31 @@ def test_profile_modal_prefills_existing_values():
         "preferred_tour": "Accessible",
     }
     modal = profiles_cog.ProfileModal(tour="Accessible", existing=existing)
+    assert len(modal.children) == 4
     values = {child.label: child.default for child in modal.children}
+    assert "Timezone" not in values
     assert values["Golf+ Username"] == "Alumec"
-    assert values["Timezone"] == "America/Denver"
     assert values["Days you usually play"] == "Weeknights"
-    assert values["Playing window (your time)"] == "6pm-9pm"
+    # Saved in Denver time (6pm-9pm MST) — prefilled converted to Eastern.
+    assert values["Playing window (Eastern Time)"] == "8pm-11pm"
     assert values["Golf+ Handicap"] == "12.5"
+
+
+def test_profile_modal_prefills_eastern_window_as_is():
+    # No stored timezone: the window is already Eastern Time.
+    existing = {
+        "golfplus_username": "Alumec",
+        "timezone": "",
+        "avail_days": "Weeknights",
+        "avail_start_min": 18 * 60,
+        "avail_end_min": 21 * 60,
+        "available_time": "Weeknights 6pm–9pm ET",
+        "handicap": 12.5,
+        "preferred_tour": "Accessible",
+    }
+    modal = profiles_cog.ProfileModal(tour="Accessible", existing=existing)
+    values = {child.label: child.default for child in modal.children}
+    assert values["Playing window (Eastern Time)"] == "6pm-9pm"
 
 
 def test_profile_modal_leaves_days_and_window_blank_for_legacy_profile():
@@ -58,7 +77,6 @@ def test_profile_modal_leaves_days_and_window_blank_for_legacy_profile():
     # split into days + a window, so the new fields start empty.
     existing = {
         "golfplus_username": "Alumec",
-        "timezone": "America/Denver",
         "available_time": "Weeknights after 6pm MT",
         "avail_days": "",
         "avail_start_min": None,
@@ -69,7 +87,7 @@ def test_profile_modal_leaves_days_and_window_blank_for_legacy_profile():
     modal = profiles_cog.ProfileModal(tour="Accessible", existing=existing)
     values = {child.label: child.default for child in modal.children}
     assert values["Days you usually play"] == ""
-    assert values["Playing window (your time)"] == ""
+    assert values["Playing window (Eastern Time)"] == ""
 
 
 def test_profile_modal_prefills_plus_handicap_with_plus_sign():

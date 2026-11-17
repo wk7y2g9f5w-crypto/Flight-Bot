@@ -17,7 +17,7 @@ class WelcomeCog(commands.Cog):
                 "Before you jump in, set your GGA profile with the "
                 "**/profile** command in the server. It takes a minute and "
                 "helps the crew match you with the right games:\n\n"
-                "• **Timezone / available playing time** — when you can play\n"
+                "• **Available playing time (Eastern Time)** — when you can play\n"
                 "• **Golf+ Handicap** — so flights stay fair\n"
                 "• **Preferred Tour** — ProTour, Accessible, or Both\n\n"
                 "You can run /profile again anytime to update it."

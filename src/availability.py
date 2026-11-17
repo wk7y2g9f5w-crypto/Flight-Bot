@@ -1,16 +1,17 @@
-"""Playing-time parsing and conversion to Eastern Time.
+"""Playing-time parsing and display in Eastern Time.
 
 Pure functions (no Discord, no database) so they are easy to test.
 
-Members enter their usual playing window in their own timezone; the bot
-stores the window and shows it converted to Eastern Time
-(America/New_York — EST in winter, EDT in summer) so the roster reads in
-one timezone. A window is stored as minutes from midnight in the member's
-own timezone, so the conversion is always done from the member's clock.
+Members enter their usual playing window in Eastern Time
+(America/New_York — EST in winter, EDT in summer), and the window is
+stored as minutes from midnight Eastern. ``convert_window_to_eastern``
+is kept only to translate windows saved before timezones were removed:
+those were stored in the member's own timezone, and the modal prefill
+converts them once so nobody's playing time silently shifts.
 """
 import re
 from datetime import date, datetime, time as dt_time, timedelta
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
 EASTERN_TZ = "America/New_York"
 
@@ -54,10 +55,10 @@ def parse_clock(raw: str) -> int:
 def parse_window(raw: str) -> tuple[int, int]:
     """Parse a playing window like "6pm-9pm" or "18:00 to 21:30".
 
-    Returns (start_min, end_min) as minutes from midnight in the
-    member's own timezone. An end earlier than the start means the
-    window runs past midnight (10pm-1am). Raises ValueError with a
-    plain-language message for anything else.
+    Returns (start_min, end_min) as minutes from midnight Eastern Time.
+    An end earlier than the start means the window runs past midnight
+    (10pm-1am). Raises ValueError with a plain-language message for
+    anything else.
     """
     text = (raw or "").strip()
     parts = [p for p in _WINDOW_SPLIT_RE.split(text) if p]
@@ -70,26 +71,6 @@ def parse_window(raw: str) -> tuple[int, int]:
     if start == end:
         raise ValueError("The start and end times are the same.")
     return start, end
-
-
-def validate_timezone(raw: str) -> str:
-    """Check a timezone name and return it as entered (stripped).
-
-    Must be a real IANA name like "America/Denver" — abbreviations
-    like "MT" do not pin down a timezone, so they are rejected.
-    Raises ValueError with a plain-language message.
-    """
-    text = (raw or "").strip()
-    if not text:
-        raise ValueError("Timezone is empty — enter one like America/Denver.")
-    try:
-        ZoneInfo(text)
-    except ZoneInfoNotFoundError:
-        raise ValueError(
-            f'"{text}" is not a timezone I know — use a full name like '
-            "America/Denver, not an abbreviation like MT."
-        ) from None
-    return text
 
 
 def format_clock(minutes: int) -> str:
@@ -114,8 +95,9 @@ def convert_window_to_eastern(
     tz_name: str,
     on_date: date | None = None,
 ) -> tuple[str, str]:
-    """Convert a member-local window to Eastern Time.
+    """Convert a window saved in a member's old timezone to Eastern Time.
 
+    Legacy use only — new windows are entered in Eastern Time already.
     Returns (start, end) as "8pm"-style strings in America/New_York.
     A window that runs past midnight stays a window (10pm-1am local
     becomes, say, 12am-3am Eastern). ``on_date`` pins which day the
@@ -139,14 +121,6 @@ def convert_window_to_eastern(
     )
 
 
-def local_tz_abbrev(tz_name: str, on_date: date | None = None) -> str:
-    """The short name of a timezone on a given day, e.g. "MDT"."""
-    tz = ZoneInfo(tz_name)
-    if on_date is None:
-        on_date = datetime.now(tz).date()
-    return datetime.combine(on_date, dt_time(12, 0), tzinfo=tz).tzname() or tz_name
-
-
 def format_eastern_display(days: str, start: str, end: str) -> str:
-    """The roster line for a converted window, e.g. "Weeknights 8pm–11pm ET"."""
+    """The roster line for a window, e.g. "Weeknights 8pm–11pm ET"."""
     return f"{days} {start}–{end} ET"

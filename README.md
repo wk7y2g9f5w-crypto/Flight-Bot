@@ -4,7 +4,7 @@ A small Discord bot for the GGA golf community. It collects four things
 from every member so the crew can build flights and TeamGolf squads:
 
 1. **Golf+ Username** — their in-game handle
-2. **Timezone / available playing time** — when they can play
+2. **Available playing time (Eastern Time)** — when they can play, entered in Eastern Time
 3. **Golf+ Handicap** — so flights stay fair
 4. **Preferred Tour** — ProTour, Accessible, or Both
 
@@ -16,14 +16,13 @@ the same form.
 ## What the bot does
 
 - **`/profile`** — opens a short form. Pick your tour from a menu, then
-  enter your Golf+ username, your timezone (like `America/Denver` — a
-  full name, not an abbreviation like MT), the days you usually play
-  (like "Weeknights"), and a playing window in your own time (like
-  "6pm-9pm"). The bot converts the window to Eastern Time for the
-  roster and shows you both versions in the summary. Run it again
-  anytime to change anything — the form comes pre-filled with your
-  current answers. (The Golf+ username is optional; the handicap is
-  required.) Profiles saved before structured times keep their old
+  enter your Golf+ username, the days you usually play
+  (like "Weeknights"), and a playing window in **Eastern Time** (like
+  "6pm-9pm ET"). Everything is in Eastern Time, so the roster reads in
+  one timezone. Run it again anytime to change anything — the form
+  comes pre-filled with your current answers, with older windows
+  translated to Eastern. (The Golf+ username is optional; the handicap
+  is required.) Profiles saved before structured times keep their old
   free-text entry until the member re-saves.
 - **`/post-profile-button`** — crew/admins only. Posts a persistent
   **Set Up Your Profile** button in the channel where you run it, for
@@ -32,8 +31,8 @@ the same form.
   keeps working across bot restarts. If the message is ever deleted,
   run the command again to post a fresh one.
 - **`/roster`** — crew/admins only. Lists everyone's saved profiles
-  (name, Golf+ username, timezone, playing time shown in Eastern Time,
-  handicap, tour). You can narrow it down by tour or by timezone. Only
+  (name, Golf+ username, playing time in Eastern Time,
+  handicap, tour). You can narrow it down by tour. Only
   people with Administrator or Manage Server permission can use it.
 - **Welcome DM** — when someone new joins the server, the bot sends
   them a private message inviting them to set their profile with

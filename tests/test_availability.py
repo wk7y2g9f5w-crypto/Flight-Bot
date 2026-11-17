@@ -8,10 +8,8 @@ from src.availability import (
     format_clock,
     format_eastern_display,
     format_window_local,
-    local_tz_abbrev,
     parse_clock,
     parse_window,
-    validate_timezone,
 )
 
 
@@ -69,17 +67,6 @@ def test_parse_window_accepts(raw, expected):
 def test_parse_window_rejects(raw):
     with pytest.raises(ValueError):
         parse_window(raw)
-
-
-@pytest.mark.parametrize("raw", ["America/Denver", "America/New_York", "UTC", "Europe/London"])
-def test_validate_timezone_accepts(raw):
-    assert validate_timezone(raw) == raw
-
-
-@pytest.mark.parametrize("raw", ["", "MT", "Denver", "Mars/Olympus"])
-def test_validate_timezone_rejects(raw):
-    with pytest.raises(ValueError):
-        validate_timezone(raw)
 
 
 @pytest.mark.parametrize(
@@ -149,8 +136,3 @@ def test_convert_half_hours():
 
 def test_format_eastern_display():
     assert format_eastern_display("Weeknights", "8pm", "11pm") == "Weeknights 8pm–11pm ET"
-
-
-def test_local_tz_abbrev_follows_dst():
-    assert local_tz_abbrev("America/Denver", date(2026, 11, 17)) == "MST"
-    assert local_tz_abbrev("America/Denver", date(2026, 7, 15)) == "MDT"

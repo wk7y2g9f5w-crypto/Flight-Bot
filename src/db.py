@@ -87,11 +87,13 @@ async def upsert_profile(
 ) -> None:
     """Insert a profile, or replace the stored values if one already exists.
 
-    ``available_time`` is the display string (the Eastern-converted
-    window for new saves, the member's own words for old ones).
+    ``available_time`` is the display string (the Eastern Time window
+    for new saves, the member's own words for old ones).
     ``avail_days`` / ``avail_start_min`` / ``avail_end_min`` hold the
-    structured window in the member's own timezone; they are None/empty
-    for profiles saved before structured times existed.
+    structured window in Eastern Time; they are None/empty for profiles
+    saved before structured times existed. ``timezone`` is legacy: it
+    holds the zone a pre-removal profile was saved in (used once to
+    convert its window to Eastern); new saves store "".
     """
     now = datetime.now(dt_timezone.utc).isoformat()
     async with aiosqlite.connect(path) as conn:
@@ -145,19 +147,15 @@ async def list_profiles(
     path: str,
     *,
     tour: str | None = None,
-    timezone: str | None = None,
 ) -> list[dict]:
-    """Return all profiles, optionally filtered by tour and/or a
-    case-insensitive timezone substring. Ordered by display name."""
+    """Return all profiles, optionally filtered by tour.
+    Ordered by display name."""
     query = "SELECT * FROM member_profiles"
     clauses: list[str] = []
     params: list = []
     if tour:
         clauses.append("preferred_tour = ?")
         params.append(tour)
-    if timezone:
-        clauses.append("timezone LIKE ?")
-        params.append(f"%{timezone}%")
     if clauses:
         query += " WHERE " + " AND ".join(clauses)
     query += " ORDER BY display_name COLLATE NOCASE"
