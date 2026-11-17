@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS member_profiles(
   golfplus_username TEXT NOT NULL DEFAULT '',
   timezone TEXT NOT NULL DEFAULT '',
   available_time TEXT NOT NULL DEFAULT '',
+  avail_days TEXT NOT NULL DEFAULT '',
+  avail_start_min INTEGER,
+  avail_end_min INTEGER,
   handicap REAL,
   preferred_tour TEXT NOT NULL DEFAULT 'Both'
     CHECK(preferred_tour IN ('ProTour', 'Accessible', 'Both')),
@@ -36,6 +39,19 @@ async def init_db(path: str) -> None:
                 "ALTER TABLE member_profiles "
                 "ADD COLUMN golfplus_username TEXT NOT NULL DEFAULT ''"
             )
+        # Databases created before structured playing times existed get
+        # the new columns added instead of being rebuilt. Old profiles
+        # keep their free-text available_time; the new columns are NULL
+        # for them until the member re-saves.
+        for column, ddl in (
+            ("avail_days", "TEXT NOT NULL DEFAULT ''"),
+            ("avail_start_min", "INTEGER"),
+            ("avail_end_min", "INTEGER"),
+        ):
+            if column not in columns:
+                await conn.execute(
+                    f"ALTER TABLE member_profiles ADD COLUMN {column} {ddl}"
+                )
         await conn.commit()
 
 
@@ -46,6 +62,9 @@ def _row_to_profile(row: aiosqlite.Row) -> dict:
         "golfplus_username": row["golfplus_username"],
         "timezone": row["timezone"],
         "available_time": row["available_time"],
+        "avail_days": row["avail_days"],
+        "avail_start_min": row["avail_start_min"],
+        "avail_end_min": row["avail_end_min"],
         "handicap": row["handicap"],
         "preferred_tour": row["preferred_tour"],
         "updated_at": row["updated_at"],
@@ -62,20 +81,34 @@ async def upsert_profile(
     handicap,
     preferred_tour: str,
     golfplus_username: str = "",
+    avail_days: str = "",
+    avail_start_min=None,
+    avail_end_min=None,
 ) -> None:
-    """Insert a profile, or replace the stored values if one already exists."""
+    """Insert a profile, or replace the stored values if one already exists.
+
+    ``available_time`` is the display string (the Eastern-converted
+    window for new saves, the member's own words for old ones).
+    ``avail_days`` / ``avail_start_min`` / ``avail_end_min`` hold the
+    structured window in the member's own timezone; they are None/empty
+    for profiles saved before structured times existed.
+    """
     now = datetime.now(dt_timezone.utc).isoformat()
     async with aiosqlite.connect(path) as conn:
         await conn.execute(
             """INSERT INTO member_profiles
                  (discord_id, display_name, golfplus_username, timezone,
-                  available_time, handicap, preferred_tour, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                  available_time, avail_days, avail_start_min, avail_end_min,
+                  handicap, preferred_tour, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(discord_id) DO UPDATE SET
                  display_name = excluded.display_name,
                  golfplus_username = excluded.golfplus_username,
                  timezone = excluded.timezone,
                  available_time = excluded.available_time,
+                 avail_days = excluded.avail_days,
+                 avail_start_min = excluded.avail_start_min,
+                 avail_end_min = excluded.avail_end_min,
                  handicap = excluded.handicap,
                  preferred_tour = excluded.preferred_tour,
                  updated_at = excluded.updated_at""",
@@ -85,6 +118,9 @@ async def upsert_profile(
                 golfplus_username,
                 timezone,
                 available_time,
+                avail_days,
+                avail_start_min,
+                avail_end_min,
                 handicap,
                 preferred_tour,
                 now,

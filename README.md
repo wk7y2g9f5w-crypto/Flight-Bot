@@ -13,16 +13,19 @@ Members can update their info anytime by running `/profile` again.
 ## What the bot does
 
 - **`/profile`** — opens a short form. Pick your tour from a menu, then
-  enter your Golf+ username, your timezone (like `America/Denver`),
-  your usual playing times (like "Weeknights after 6pm MT, weekend
-  mornings"), and your Golf+ handicap. The bot saves it and shows you
-  a summary. Run it again anytime to change anything — the form comes
-  pre-filled with your current answers. (The Golf+ username is
-  optional; the handicap is required.)
+  enter your Golf+ username, your timezone (like `America/Denver` — a
+  full name, not an abbreviation like MT), the days you usually play
+  (like "Weeknights"), and a playing window in your own time (like
+  "6pm-9pm"). The bot converts the window to Eastern Time for the
+  roster and shows you both versions in the summary. Run it again
+  anytime to change anything — the form comes pre-filled with your
+  current answers. (The Golf+ username is optional; the handicap is
+  required.) Profiles saved before structured times keep their old
+  free-text entry until the member re-saves.
 - **`/roster`** — crew/admins only. Lists everyone's saved profiles
-  (name, Golf+ username, timezone, playing time, handicap, tour). You can narrow it
-  down by tour or by timezone. Only people with Administrator or
-  Manage Server permission can use it.
+  (name, Golf+ username, timezone, playing time shown in Eastern Time,
+  handicap, tour). You can narrow it down by tour or by timezone. Only
+  people with Administrator or Manage Server permission can use it.
 - **Welcome DM** — when someone new joins the server, the bot sends
   them a private message inviting them to set their profile with
   `/profile`. If their DMs are closed, the bot just skips them quietly.
@@ -111,8 +114,11 @@ discord.py 2.7.1, aiosqlite, and pytest installed.)
 - `src/config.py` — reads settings from the environment.
 - `src/db.py` — the SQLite storage (one table: `member_profiles`).
 - `src/validation.py` — handicap and tour checks.
+- `src/availability.py` — playing-time parsing and conversion to
+  Eastern Time.
 - `src/cogs/profiles.py` — the `/profile` command and form.
 - `src/cogs/roster.py` — the `/roster` command for crew/admins.
 - `src/cogs/welcome.py` — the welcome DM for new members.
-- `tests/` — pytest tests for the database, validation, and cog loading.
+- `tests/` — pytest tests for the database, validation, availability
+  conversion, and cog loading.
 - `render.yaml` — Render background worker + disk setup.

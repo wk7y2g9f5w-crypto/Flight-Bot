@@ -35,7 +35,10 @@ def test_profile_modal_prefills_existing_values():
     existing = {
         "golfplus_username": "Alumec",
         "timezone": "America/Denver",
-        "available_time": "Weeknights after 6pm MT",
+        "avail_days": "Weeknights",
+        "avail_start_min": 18 * 60,
+        "avail_end_min": 21 * 60,
+        "available_time": "Weeknights 8pm–11pm ET",
         "handicap": 12.5,
         "preferred_tour": "Accessible",
     }
@@ -43,8 +46,28 @@ def test_profile_modal_prefills_existing_values():
     values = {child.label: child.default for child in modal.children}
     assert values["Golf+ Username"] == "Alumec"
     assert values["Timezone"] == "America/Denver"
-    assert values["Available playing time"] == "Weeknights after 6pm MT"
+    assert values["Days you usually play"] == "Weeknights"
+    assert values["Playing window (your time)"] == "6pm-9pm"
     assert values["Golf+ Handicap"] == "12.5"
+
+
+def test_profile_modal_leaves_days_and_window_blank_for_legacy_profile():
+    # Saved before structured times: the free-text entry cannot be
+    # split into days + a window, so the new fields start empty.
+    existing = {
+        "golfplus_username": "Alumec",
+        "timezone": "America/Denver",
+        "available_time": "Weeknights after 6pm MT",
+        "avail_days": "",
+        "avail_start_min": None,
+        "avail_end_min": None,
+        "handicap": 12.5,
+        "preferred_tour": "Accessible",
+    }
+    modal = profiles_cog.ProfileModal(tour="Accessible", existing=existing)
+    values = {child.label: child.default for child in modal.children}
+    assert values["Days you usually play"] == ""
+    assert values["Playing window (your time)"] == ""
 
 
 def test_profile_modal_prefills_plus_handicap_with_plus_sign():
