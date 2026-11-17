@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS member_profiles(
 -- Team League registrations: same shape as a profile, kept in its own
 -- table so the crew can count exactly who signed up for the team
 -- league. No timezone column — windows are Eastern Time from the start.
+-- No tour column either — team registration does not ask for one.
 CREATE TABLE IF NOT EXISTS team_registrations(
   discord_id INTEGER PRIMARY KEY,
   display_name TEXT NOT NULL,
@@ -36,8 +37,6 @@ CREATE TABLE IF NOT EXISTS team_registrations(
   avail_start_min INTEGER,
   avail_end_min INTEGER,
   handicap REAL,
-  preferred_tour TEXT NOT NULL DEFAULT 'Both'
-    CHECK(preferred_tour IN ('ProTour', 'Accessible', 'Both')),
   updated_at TEXT NOT NULL
 );
 """
@@ -69,6 +68,44 @@ async def init_db(path: str) -> None:
                 await conn.execute(
                     f"ALTER TABLE member_profiles ADD COLUMN {column} {ddl}"
                 )
+        # Team registrations no longer collect a tour (removed
+        # 2026-11-17). Databases created while the column existed get
+        # the table rebuilt without it, keeping every row — a plain
+        # DROP COLUMN cannot be used because the column is named in a
+        # CHECK constraint.
+        async with conn.execute(
+            "PRAGMA table_info(team_registrations)"
+        ) as cur:
+            team_columns = {row[1] for row in await cur.fetchall()}
+        if "preferred_tour" in team_columns:
+            await conn.execute(
+                "ALTER TABLE team_registrations "
+                "RENAME TO team_registrations_old"
+            )
+            await conn.execute(
+                """CREATE TABLE team_registrations(
+                  discord_id INTEGER PRIMARY KEY,
+                  display_name TEXT NOT NULL,
+                  golfplus_username TEXT NOT NULL DEFAULT '',
+                  available_time TEXT NOT NULL DEFAULT '',
+                  avail_days TEXT NOT NULL DEFAULT '',
+                  avail_start_min INTEGER,
+                  avail_end_min INTEGER,
+                  handicap REAL,
+                  updated_at TEXT NOT NULL
+                )"""
+            )
+            await conn.execute(
+                """INSERT INTO team_registrations
+                     (discord_id, display_name, golfplus_username,
+                      available_time, avail_days, avail_start_min,
+                      avail_end_min, handicap, updated_at)
+                   SELECT discord_id, display_name, golfplus_username,
+                      available_time, avail_days, avail_start_min,
+                      avail_end_min, handicap, updated_at
+                   FROM team_registrations_old"""
+            )
+            await conn.execute("DROP TABLE team_registrations_old")
         await conn.commit()
 
 
@@ -203,7 +240,6 @@ def _row_to_team_registration(row: aiosqlite.Row) -> dict:
         "avail_start_min": row["avail_start_min"],
         "avail_end_min": row["avail_end_min"],
         "handicap": row["handicap"],
-        "preferred_tour": row["preferred_tour"],
         "updated_at": row["updated_at"],
     }
 
@@ -215,7 +251,6 @@ async def upsert_team_registration(
     display_name: str,
     available_time: str,
     handicap,
-    preferred_tour: str,
     golfplus_username: str = "",
     avail_days: str = "",
     avail_start_min=None,
@@ -231,8 +266,8 @@ async def upsert_team_registration(
             """INSERT INTO team_registrations
                  (discord_id, display_name, golfplus_username,
                   available_time, avail_days, avail_start_min, avail_end_min,
-                  handicap, preferred_tour, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  handicap, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(discord_id) DO UPDATE SET
                  display_name = excluded.display_name,
                  golfplus_username = excluded.golfplus_username,
@@ -241,7 +276,6 @@ async def upsert_team_registration(
                  avail_start_min = excluded.avail_start_min,
                  avail_end_min = excluded.avail_end_min,
                  handicap = excluded.handicap,
-                 preferred_tour = excluded.preferred_tour,
                  updated_at = excluded.updated_at""",
             (
                 discord_id,
@@ -252,7 +286,6 @@ async def upsert_team_registration(
                 avail_start_min,
                 avail_end_min,
                 handicap,
-                preferred_tour,
                 now,
             ),
         )
@@ -271,25 +304,12 @@ async def get_team_registration(path: str, discord_id: int) -> dict | None:
     return _row_to_team_registration(row) if row else None
 
 
-async def list_team_registrations(
-    path: str,
-    *,
-    tour: str | None = None,
-) -> list[dict]:
-    """Return all team registrations, optionally filtered by tour.
-    Ordered by display name."""
-    query = "SELECT * FROM team_registrations"
-    clauses: list[str] = []
-    params: list = []
-    if tour:
-        clauses.append("preferred_tour = ?")
-        params.append(tour)
-    if clauses:
-        query += " WHERE " + " AND ".join(clauses)
-    query += " ORDER BY display_name COLLATE NOCASE"
+async def list_team_registrations(path: str) -> list[dict]:
+    """Return all team registrations, ordered by display name."""
+    query = "SELECT * FROM team_registrations ORDER BY display_name COLLATE NOCASE"
     async with aiosqlite.connect(path) as conn:
         conn.row_factory = aiosqlite.Row
-        async with conn.execute(query, params) as cur:
+        async with conn.execute(query) as cur:
             rows = await cur.fetchall()
     return [_row_to_team_registration(row) for row in rows]
 

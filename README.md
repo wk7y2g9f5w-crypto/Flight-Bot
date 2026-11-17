@@ -40,7 +40,7 @@ section below.
   handicap, tour). You can narrow it down by tour. Only
   people with Administrator or Manage Server permission can use it.
 - **`/register-team`** — opens the Team League form: the same fields
-  as `/profile` (tour, Golf+ username, days, playing window in
+  as `/profile` minus the tour (Golf+ username, days, playing window in
   Eastern Time, handicap), saved separately in its own table so the
   crew can count signups. A profile is not required — if one exists,
   the form comes pre-filled from it (or from an existing team
@@ -48,8 +48,8 @@ section below.
 - **`/unregister-team`** — pulls you out of the Team League (deletes
   your team registration; your profile is untouched).
 - **`/team-roster`** — crew/admins only. Lists everyone registered
-  for the Team League, with the total player count in the title, and
-  a tour filter. Separate from `/roster`.
+  for the Team League, with the total player count in the title.
+  Separate from `/roster`.
 - **`/post-team-button`** — crew/admins only. Posts a persistent
   **Register for Team** button in the channel where you run it, the
   same as the profile button. Tapping it sends that member the same

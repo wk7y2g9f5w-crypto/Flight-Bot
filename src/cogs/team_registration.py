@@ -1,11 +1,11 @@
 """/register-team — Team League registration, separate from /profile.
 
-Same form as /profile (Golf+ username, days, playing window in Eastern
-Time, handicap, tour), saved in its own table so the crew can count
-exactly who signed up for the team league. Registering for the team
-does not create or change a member's profile, and a profile is not
-required to register — if one exists, the form is pre-filled from it
-(or from the member's existing team registration, which takes
+Same form as /profile minus the tour (Golf+ username, days, playing
+window in Eastern Time, handicap), saved in its own table so the crew
+can count exactly who signed up for the team league. Registering for
+the team does not create or change a member's profile, and a profile
+is not required to register — if one exists, the form is pre-filled
+from it (or from the member's existing team registration, which takes
 precedence). Re-running the command updates the registration.
 
 Commands: /register-team (the form), /unregister-team (pull out),
@@ -23,8 +23,7 @@ from src.availability import (
     parse_window,
     prefill_window,
 )
-from src.cogs.profiles import TourSelect
-from src.validation import VALID_TOURS, format_handicap, parse_handicap
+from src.validation import format_handicap, parse_handicap
 
 MAX_ENTRIES = 20
 
@@ -32,9 +31,8 @@ MAX_ENTRIES = 20
 class TeamModal(discord.ui.Modal):
     """The text fields of the team registration form."""
 
-    def __init__(self, *, tour: str, existing: dict | None):
+    def __init__(self, *, existing: dict | None):
         super().__init__(title="Register for the Team League")
-        self.tour = tour
         self.username_input = discord.ui.TextInput(
             label="Golf+ Username",
             placeholder="e.g. Alumec",
@@ -95,7 +93,6 @@ class TeamModal(discord.ui.Modal):
             avail_start_min=start_min,
             avail_end_min=end_min,
             handicap=handicap,
-            preferred_tour=self.tour,
         )
         embed = discord.Embed(
             title="You're registered for the Team League",
@@ -116,19 +113,15 @@ class TeamModal(discord.ui.Modal):
             inline=False,
         )
         embed.add_field(name="Golf+ Handicap", value=format_handicap(handicap), inline=True)
-        embed.add_field(name="Preferred Tour", value=self.tour, inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 class TeamSetupView(discord.ui.View):
-    """Ephemeral setup message: pick a tour, then open the details modal."""
+    """Ephemeral setup message: tap the button to open the details modal."""
 
     def __init__(self, *, existing: dict | None):
         super().__init__(timeout=600)
-        current = (existing or {}).get("preferred_tour")
-        self.tour: str | None = current if current in VALID_TOURS else None
         self.existing = existing
-        self.add_item(TourSelect(current))
 
     @discord.ui.button(
         label="Enter username, playing time & handicap",
@@ -137,14 +130,8 @@ class TeamSetupView(discord.ui.View):
     async def open_modal(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
-        if not self.tour:
-            await interaction.response.send_message(
-                "Pick a Preferred Tour from the menu first.",
-                ephemeral=True,
-            )
-            return
         await interaction.response.send_modal(
-            TeamModal(tour=self.tour, existing=self.existing)
+            TeamModal(existing=self.existing)
         )
 
 
@@ -171,7 +158,7 @@ class TeamButtonView(discord.ui.View):
 
 
 async def send_team_setup(interaction: discord.Interaction) -> None:
-    """Send the ephemeral setup message (tour picker + open-modal button).
+    """Send the ephemeral setup message (open-modal button).
 
     Shared by /register-team and the persistent register button, so both
     open exactly the same form. Prefills from the member's existing team
@@ -182,9 +169,10 @@ async def send_team_setup(interaction: discord.Interaction) -> None:
     )
     existing = team_reg
     message = (
-        "Register for the GGA Team League — pick your tour, then fill in "
-        "the details. You can run /register-team again anytime to change "
-        "it, or /unregister-team to pull out."
+        "Register for the GGA Team League — fill in your Golf+ username, "
+        "playing time (Eastern Time), and handicap. You can run "
+        "/register-team again anytime to change it, or /unregister-team "
+        "to pull out."
     )
     if existing is None:
         existing = await db.get_profile(config.DB_PATH, interaction.user.id)
@@ -246,14 +234,10 @@ class TeamRegistrationCog(commands.Cog):
         name="team-roster",
         description="List everyone registered for the Team League, with the player count (crew/admin only).",
     )
-    @app_commands.describe(
-        tour="Only show players who prefer this tour.",
-    )
     @app_commands.guild_only()
     async def team_roster(
         self,
         interaction: discord.Interaction,
-        tour: str | None = None,
     ) -> None:
         perms = interaction.user.guild_permissions  # type: ignore[union-attr]
         if not (perms.administrator or perms.manage_guild):
@@ -262,20 +246,13 @@ class TeamRegistrationCog(commands.Cog):
                 ephemeral=True,
             )
             return
-        registrations = await db.list_team_registrations(
-            config.DB_PATH,
-            tour=tour,
-        )
+        registrations = await db.list_team_registrations(config.DB_PATH)
         embed = discord.Embed(
             title=f"Team League roster — {len(registrations)} registered",
             colour=discord.Colour.green(),
         )
         if not registrations:
-            embed.description = (
-                "Nobody has registered for the team league yet."
-                if tour is None
-                else f"Nobody registered for {tour} yet."
-            )
+            embed.description = "Nobody has registered for the team league yet."
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
         lines = []
@@ -283,13 +260,12 @@ class TeamRegistrationCog(commands.Cog):
             lines.append(
                 f"**{r['display_name']}** — Golf+ {r['golfplus_username'] or '—'} | "
                 f"{r['available_time'] or '—'} | "
-                f"HCP {format_handicap(r['handicap'])} | {r['preferred_tour']}"
+                f"HCP {format_handicap(r['handicap'])}"
             )
         embed.description = "\n".join(lines)
         if len(registrations) > MAX_ENTRIES:
             embed.set_footer(
-                text=f"Showing the first {MAX_ENTRIES} of {len(registrations)} — "
-                "narrow it down with the tour filter."
+                text=f"Showing the first {MAX_ENTRIES} of {len(registrations)}."
             )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -318,7 +294,7 @@ class TeamRegistrationCog(commands.Cog):
             title="Register for the GGA Team League",
             description=(
                 "Tap the button below and fill in your Golf+ username, "
-                "playing time (Eastern Time), handicap, and preferred tour. "
+                "playing time (Eastern Time), and handicap. "
                 "Everyone who wants to play in the team league needs to "
                 "register — it takes about a minute, and you can update it "
                 "anytime."

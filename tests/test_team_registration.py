@@ -37,7 +37,6 @@ def test_team_upsert_get_round_trip(db_path):
             avail_start_min=20 * 60,
             avail_end_min=23 * 60,
             handicap=12.5,
-            preferred_tour="ProTour",
         )
     )
     reg = run(db.get_team_registration(db_path, 111))
@@ -49,7 +48,7 @@ def test_team_upsert_get_round_trip(db_path):
     assert reg["avail_start_min"] == 20 * 60
     assert reg["avail_end_min"] == 23 * 60
     assert reg["handicap"] == 12.5
-    assert reg["preferred_tour"] == "ProTour"
+    assert "preferred_tour" not in reg
 
 
 def test_team_upsert_updates_existing(db_path):
@@ -61,7 +60,6 @@ def test_team_upsert_updates_existing(db_path):
             display_name="Alumec",
             available_time="Weeknights",
             handicap=12.5,
-            preferred_tour="ProTour",
         )
     )
     run(
@@ -71,22 +69,20 @@ def test_team_upsert_updates_existing(db_path):
             display_name="Alumec",
             available_time="Weekend mornings",
             handicap=10.0,
-            preferred_tour="Both",
         )
     )
     reg = run(db.get_team_registration(db_path, 111))
     assert reg["available_time"] == "Weekend mornings"
     assert reg["handicap"] == 10.0
-    assert reg["preferred_tour"] == "Both"
     assert len(run(db.list_team_registrations(db_path))) == 1
 
 
-def test_team_list_filters_by_tour(db_path):
+def test_team_list_returns_all_ordered(db_path):
     run(db.init_db(db_path))
-    for discord_id, name, hcp, tour in [
-        (1, "Amy", 8.0, "ProTour"),
-        (2, "Ben", 20.0, "Accessible"),
-        (3, "Cal", None, "Both"),
+    for discord_id, name, hcp in [
+        (2, "Ben", 20.0),
+        (1, "Amy", 8.0),
+        (3, "Cal", None),
     ]:
         run(
             db.upsert_team_registration(
@@ -95,17 +91,11 @@ def test_team_list_filters_by_tour(db_path):
                 display_name=name,
                 available_time="Evenings",
                 handicap=hcp,
-                preferred_tour=tour,
             )
         )
-    assert len(run(db.list_team_registrations(db_path))) == 3
     assert [
-        r["display_name"]
-        for r in run(db.list_team_registrations(db_path, tour="ProTour"))
-    ] == ["Amy"]
-    assert run(db.list_team_registrations(db_path, tour="Accessible"))[0][
-        "display_name"
-    ] == "Ben"
+        r["display_name"] for r in run(db.list_team_registrations(db_path))
+    ] == ["Amy", "Ben", "Cal"]
 
 
 def test_team_delete(db_path):
@@ -117,13 +107,56 @@ def test_team_delete(db_path):
             display_name="Alumec",
             available_time="Weeknights",
             handicap=12.5,
-            preferred_tour="ProTour",
         )
     )
     run(db.delete_team_registration(db_path, 111))
     assert run(db.get_team_registration(db_path, 111)) is None
     # Deleting a registration that is not there is a no-op, not an error.
     run(db.delete_team_registration(db_path, 111))
+
+
+def test_init_db_drops_tour_column_keeping_rows(db_path):
+    # A database created while team registrations still had a tour
+    # column (the schema before 2026-11-17) gets the table rebuilt
+    # without it, keeping every row.
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """CREATE TABLE team_registrations(
+          discord_id INTEGER PRIMARY KEY,
+          display_name TEXT NOT NULL,
+          golfplus_username TEXT NOT NULL DEFAULT '',
+          available_time TEXT NOT NULL DEFAULT '',
+          avail_days TEXT NOT NULL DEFAULT '',
+          avail_start_min INTEGER,
+          avail_end_min INTEGER,
+          handicap REAL,
+          preferred_tour TEXT NOT NULL DEFAULT 'Both'
+            CHECK(preferred_tour IN ('ProTour', 'Accessible', 'Both')),
+          updated_at TEXT NOT NULL
+        )"""
+    )
+    conn.execute(
+        """INSERT INTO team_registrations
+             (discord_id, display_name, available_time, handicap,
+              preferred_tour, updated_at)
+           VALUES (111, 'Alumec', 'Weeknights', 12.5, 'ProTour', 'x')"""
+    )
+    conn.commit()
+    conn.close()
+    run(db.init_db(db_path))
+    reg = run(db.get_team_registration(db_path, 111))
+    assert reg is not None
+    assert reg["display_name"] == "Alumec"
+    assert reg["handicap"] == 12.5
+    assert "preferred_tour" not in reg
+    conn = sqlite3.connect(db_path)
+    columns = {row[1] for row in conn.execute(
+        "PRAGMA table_info(team_registrations)"
+    )}
+    conn.close()
+    assert "preferred_tour" not in columns
 
 
 def test_team_get_missing_returns_none(db_path):
@@ -142,9 +175,8 @@ def test_team_modal_prefills_from_team_registration():
         "avail_end_min": 23 * 60,
         "available_time": "Weeknights 8pm–11pm ET",
         "handicap": 12.5,
-        "preferred_tour": "Accessible",
     }
-    modal = team_cog.TeamModal(tour="Accessible", existing=existing)
+    modal = team_cog.TeamModal(existing=existing)
     assert len(modal.children) == 4
     values = {child.label: child.default for child in modal.children}
     assert "Timezone" not in values
@@ -165,9 +197,8 @@ def test_team_modal_prefills_from_profile_fallback():
         "avail_end_min": 21 * 60,
         "available_time": "Weeknights 8pm–11pm ET",
         "handicap": 12.5,
-        "preferred_tour": "Accessible",
     }
-    modal = team_cog.TeamModal(tour="Accessible", existing=existing)
+    modal = team_cog.TeamModal(existing=existing)
     values = {child.label: child.default for child in modal.children}
     assert values["Playing window (Eastern Time)"] == "8pm-11pm"
 
@@ -232,7 +263,7 @@ def test_team_submit_saves_registration_not_profile(db_path, monkeypatch):
             preferred_tour="ProTour",
         )
     )
-    modal = team_cog.TeamModal(tour="ProTour", existing=None)
+    modal = team_cog.TeamModal(existing=None)
     modal.username_input._value = "Alumec"
     modal.days_input._value = "Weekends"
     modal.window_input._value = "10am-1pm"
@@ -245,7 +276,7 @@ def test_team_submit_saves_registration_not_profile(db_path, monkeypatch):
     assert reg["available_time"] == "Weekends 10am–1pm ET"
     assert reg["avail_days"] == "Weekends"
     assert reg["handicap"] == -7.0
-    assert reg["preferred_tour"] == "ProTour"
+    assert "preferred_tour" not in reg
     # The profile is untouched by a team registration.
     profile = run(db.get_profile(db_path, 123))
     assert profile["available_time"] == "Weeknights 6pm–9pm ET"
@@ -258,7 +289,7 @@ def test_team_submit_saves_registration_not_profile(db_path, monkeypatch):
 def test_team_submit_rejects_bad_window(db_path, monkeypatch):
     monkeypatch.setattr(team_cog.config, "DB_PATH", db_path)
     run(db.init_db(db_path))
-    modal = team_cog.TeamModal(tour="ProTour", existing=None)
+    modal = team_cog.TeamModal(existing=None)
     modal.username_input._value = "Alumec"
     modal.days_input._value = "Weekends"
     modal.window_input._value = "evenings"
@@ -281,7 +312,6 @@ def test_unregister_team_removes_registration(db_path, monkeypatch):
             display_name="Alumec",
             available_time="Weeknights",
             handicap=12.5,
-            preferred_tour="ProTour",
         )
     )
     cog = team_cog.TeamRegistrationCog(bot=None)
@@ -310,9 +340,9 @@ def test_unregister_team_removes_registration(db_path, monkeypatch):
 def test_team_roster_lists_with_count(db_path, monkeypatch):
     monkeypatch.setattr(team_cog.config, "DB_PATH", db_path)
     run(db.init_db(db_path))
-    for discord_id, name, tour in [
-        (1, "Amy", "ProTour"),
-        (2, "Ben", "Accessible"),
+    for discord_id, name in [
+        (1, "Amy"),
+        (2, "Ben"),
     ]:
         run(
             db.upsert_team_registration(
@@ -321,7 +351,6 @@ def test_team_roster_lists_with_count(db_path, monkeypatch):
                 display_name=name,
                 available_time="Evenings",
                 handicap=8.0,
-                preferred_tour=tour,
             )
         )
     cog = team_cog.TeamRegistrationCog(bot=None)
@@ -334,17 +363,8 @@ def test_team_roster_lists_with_count(db_path, monkeypatch):
     assert kwargs["embed"].title == "Team League roster — 2 registered"
     assert "Amy" in kwargs["embed"].description
     assert "Ben" in kwargs["embed"].description
-    # Tour filter narrows the list and the count.
-    interaction2 = _FakeInteraction(perms=_FakePerms(manage_guild=True))
-    asyncio.run(
-        team_cog.TeamRegistrationCog.team_roster.callback(
-            cog, interaction2, tour="ProTour"
-        )
-    )
-    _, kwargs2 = interaction2.response.sent[0]
-    assert kwargs2["embed"].title == "Team League roster — 1 registered"
-    assert "Amy" in kwargs2["embed"].description
-    assert "Ben" not in kwargs2["embed"].description
+    assert "ProTour" not in kwargs["embed"].description
+    assert "Accessible" not in kwargs["embed"].description
 
 
 def test_team_roster_refuses_non_admin(db_path, monkeypatch):
