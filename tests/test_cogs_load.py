@@ -10,6 +10,7 @@ from discord.ext import commands
 
 from src.cogs import profiles as profiles_cog
 from src.cogs import roster as roster_cog
+from src.cogs import team_registration as team_cog
 from src.cogs import welcome as welcome_cog
 
 
@@ -26,11 +27,20 @@ def test_all_cogs_load_and_register_commands():
     async def _load():
         await bot.add_cog(profiles_cog.ProfilesCog(bot))
         await bot.add_cog(roster_cog.RosterCog(bot))
+        await bot.add_cog(team_cog.TeamRegistrationCog(bot))
         await bot.add_cog(welcome_cog.WelcomeCog(bot))
 
     asyncio.run(_load())
     names = {cmd.name for cmd in bot.tree.get_commands()}
-    assert names == {"profile", "roster", "post-profile-button"}
+    assert names == {
+        "profile",
+        "roster",
+        "post-profile-button",
+        "register-team",
+        "unregister-team",
+        "team-roster",
+        "post-team-button",
+    }
 
 
 def test_profile_modal_prefills_existing_values():

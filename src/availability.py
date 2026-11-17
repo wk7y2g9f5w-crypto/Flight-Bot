@@ -89,6 +89,32 @@ def format_window_local(start_min: int, end_min: int) -> str:
     return f"{format_clock(start_min)}-{format_clock(end_min)}"
 
 
+def prefill_window(existing: dict | None) -> str:
+    """The window text to prefill a form with from a saved record.
+
+    Stored minutes are Eastern Time already, except for profiles saved
+    before timezones were removed — those are converted to Eastern once
+    from the stored timezone, so nobody's playing time silently shifts.
+    Returns "" when no structured window is stored.
+    """
+    if not existing:
+        return ""
+    start_min = existing.get("avail_start_min")
+    end_min = existing.get("avail_end_min")
+    if start_min is None or end_min is None:
+        return ""
+    stored_tz = existing.get("timezone")
+    if stored_tz:
+        try:
+            est_start, est_end = convert_window_to_eastern(
+                start_min, end_min, stored_tz
+            )
+            return f"{est_start}-{est_end}"
+        except Exception:
+            pass
+    return format_window_local(start_min, end_min)
+
+
 def convert_window_to_eastern(
     start_min: int,
     end_min: int,

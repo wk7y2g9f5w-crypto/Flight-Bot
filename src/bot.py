@@ -13,10 +13,12 @@ from discord.ext import commands
 
 from src import config, db
 from src.cogs import profiles as profiles_cog
+from src.cogs import team_registration as team_cog
 
 COGS = [
     "src.cogs.profiles",
     "src.cogs.roster",
+    "src.cogs.team_registration",
     "src.cogs.welcome",
 ]
 
@@ -43,6 +45,7 @@ class GGAProfileBot(commands.Bot):
         # Persistent views must be re-registered on every startup or
         # their buttons stop responding after a restart.
         self.add_view(profiles_cog.ProfileButtonView())
+        self.add_view(team_cog.TeamButtonView())
         if config.GUILD_ID:
             guild = discord.Object(id=config.GUILD_ID)
             self.tree.copy_global_to(guild=guild)

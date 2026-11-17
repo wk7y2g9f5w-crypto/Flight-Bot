@@ -30,11 +30,10 @@ from discord.ext import commands
 
 from src import config, db
 from src.availability import (
-    convert_window_to_eastern,
     format_clock,
     format_eastern_display,
-    format_window_local,
     parse_window,
+    prefill_window,
 )
 from src.validation import VALID_TOURS, format_handicap, parse_handicap
 
@@ -59,31 +58,10 @@ class ProfileModal(discord.ui.Modal):
             required=True,
             max_length=64,
         )
-        start_min = (existing or {}).get("avail_start_min")
-        end_min = (existing or {}).get("avail_end_min")
-        window_default = ""
-        if start_min is not None and end_min is not None:
-            stored_tz = (existing or {}).get("timezone")
-            if stored_tz:
-                # Saved before timezones were removed: the stored window
-                # is in the member's old timezone, so translate it to
-                # Eastern once for the prefill — nobody's playing time
-                # silently shifts. Falls back to the stored window if
-                # the old zone name is somehow unreadable.
-                try:
-                    est_start, est_end = convert_window_to_eastern(
-                        start_min, end_min, stored_tz
-                    )
-                    window_default = f"{est_start}-{est_end}"
-                except Exception:
-                    window_default = format_window_local(start_min, end_min)
-            else:
-                # Already stored in Eastern Time.
-                window_default = format_window_local(start_min, end_min)
         self.window_input = discord.ui.TextInput(
             label="Playing window (Eastern Time)",
             placeholder="e.g. 6pm-9pm ET",
-            default=window_default,
+            default=prefill_window(existing),
             required=True,
             max_length=32,
         )
@@ -176,7 +154,9 @@ class TourSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        view: ProfileSetupView = self.view  # type: ignore[assignment]
+        # Shared by the profile and team setup views — both hold a
+        # ``tour`` attribute that the open-modal button reads.
+        view = self.view  # type: ignore[assignment]
         view.tour = self.values[0]
         await interaction.response.defer()
 

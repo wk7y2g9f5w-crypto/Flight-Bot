@@ -10,6 +10,7 @@ from src.availability import (
     format_window_local,
     parse_clock,
     parse_window,
+    prefill_window,
 )
 
 
@@ -136,3 +137,24 @@ def test_convert_half_hours():
 
 def test_format_eastern_display():
     assert format_eastern_display("Weeknights", "8pm", "11pm") == "Weeknights 8pm–11pm ET"
+
+
+def test_prefill_window_eastern_as_is():
+    existing = {"avail_start_min": 18 * 60, "avail_end_min": 21 * 60}
+    assert prefill_window(existing) == "6pm-9pm"
+
+
+def test_prefill_window_converts_legacy_timezone():
+    # Denver window saved before timezones were removed.
+    existing = {
+        "avail_start_min": 18 * 60,
+        "avail_end_min": 21 * 60,
+        "timezone": "America/Denver",
+    }
+    assert prefill_window(existing) == "8pm-11pm"
+
+
+def test_prefill_window_blank_without_structured_window():
+    assert prefill_window(None) == ""
+    assert prefill_window({"avail_start_min": None, "avail_end_min": None}) == ""
+    assert prefill_window({}) == ""

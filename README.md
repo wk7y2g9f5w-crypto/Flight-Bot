@@ -13,6 +13,11 @@ by tapping the **Set Up Your Profile** button, if a crew/admin has
 posted it in a channel (see `/post-profile-button` below). Both open
 the same form.
 
+Separately, anyone who wants to play in the **Team League** registers
+with **`/register-team`** — the same form as `/profile`, saved on its
+own so the crew can count exactly who signed up. See the Team League
+section below.
+
 ## What the bot does
 
 - **`/profile`** — opens a short form. Pick your tour from a menu, then
@@ -34,12 +39,27 @@ the same form.
   (name, Golf+ username, playing time in Eastern Time,
   handicap, tour). You can narrow it down by tour. Only
   people with Administrator or Manage Server permission can use it.
+- **`/register-team`** — opens the Team League form: the same fields
+  as `/profile` (tour, Golf+ username, days, playing window in
+  Eastern Time, handicap), saved separately in its own table so the
+  crew can count signups. A profile is not required — if one exists,
+  the form comes pre-filled from it (or from an existing team
+  registration). Run it again anytime to update a registration.
+- **`/unregister-team`** — pulls you out of the Team League (deletes
+  your team registration; your profile is untouched).
+- **`/team-roster`** — crew/admins only. Lists everyone registered
+  for the Team League, with the total player count in the title, and
+  a tour filter. Separate from `/roster`.
+- **`/post-team-button`** — crew/admins only. Posts a persistent
+  **Register for Team** button in the channel where you run it, the
+  same as the profile button. Tapping it sends that member the same
+  setup form `/register-team` sends.
 - **Welcome DM** — when someone new joins the server, the bot sends
   them a private message inviting them to set their profile with
   `/profile`. If their DMs are closed, the bot just skips them quietly.
 
-Profiles are stored in a small SQLite database file. Nothing else is
-stored, and nothing leaves the server.
+Profiles and team registrations are stored in a small SQLite database
+file. Nothing else is stored, and nothing leaves the server.
 
 ## Setup — create the bot in Discord (needed whatever the host is)
 
@@ -94,7 +114,7 @@ on the Always Free tier instead: 1 vCPU / 1 GB RAM, $0 forever.
      server name, Copy Server ID. You can leave it blank and the bot
      will register the commands globally instead, but that can take up
      to an hour to appear.
-4. Deploy. In the logs you should see `Synced 3 commands to guild ...`
+4. Deploy. In the logs you should see `Synced 7 commands to guild ...`
    and `Logged in as GGA Profile Bot ...`.
 
 ## Running it on your own computer (testing)
@@ -120,13 +140,17 @@ discord.py 2.7.1, aiosqlite, and pytest installed.)
 
 - `src/bot.py` — starts the bot, loads the cogs, registers the commands.
 - `src/config.py` — reads settings from the environment.
-- `src/db.py` — the SQLite storage (one table: `member_profiles`).
+- `src/db.py` — the SQLite storage (two tables: `member_profiles` and
+  `team_registrations`).
 - `src/validation.py` — handicap and tour checks.
 - `src/availability.py` — playing-time parsing and conversion to
   Eastern Time.
 - `src/cogs/profiles.py` — the `/profile` command and form, the
   persistent setup button, and `/post-profile-button`.
 - `src/cogs/roster.py` — the `/roster` command for crew/admins.
+- `src/cogs/team_registration.py` — `/register-team`,
+  `/unregister-team`, `/team-roster`, the persistent register button,
+  and `/post-team-button`.
 - `src/cogs/welcome.py` — the welcome DM for new members.
 - `tests/` — pytest tests for the database, validation, availability
   conversion, and cog loading.
