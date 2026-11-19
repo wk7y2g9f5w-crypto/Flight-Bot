@@ -29,6 +29,11 @@ section below.
   translated to Eastern. (The Golf+ username is optional; the handicap
   is required.) Profiles saved before structured times keep their old
   free-text entry until the member re-saves.
+- **`/setup-profile-for`** — crew/admins only. Same form as
+  `/profile`, but for another member: pick the member, fill in their
+  Golf+ username, days, playing window in Eastern Time, handicap, and
+  tour, and it saves under their profile — not yours. The form comes
+  pre-filled from their existing profile if they have one.
 - **`/post-profile-button`** — crew/admins only. Posts a persistent
   **Set Up Your Profile** button in the channel where you run it, for
   members who struggle with typing the command. Tapping the button
@@ -47,6 +52,12 @@ section below.
   registration). Run it again anytime to update a registration.
 - **`/unregister-team`** — pulls you out of the Team League (deletes
   your team registration; your profile is untouched).
+- **`/register-team-for`** — crew/admins only. Same form as
+  `/register-team`, but for another member — it saves under their
+  registration, not yours. Pre-filled from their existing registration
+  (or their profile).
+- **`/unregister-team-for`** — crew/admins only. Pulls another member
+  out of the Team League.
 - **`/team-roster`** — crew/admins only. Lists everyone registered
   for the Team League, with the total player count in the title.
   Separate from `/roster`.
@@ -114,7 +125,7 @@ on the Always Free tier instead: 1 vCPU / 1 GB RAM, $0 forever.
      server name, Copy Server ID. You can leave it blank and the bot
      will register the commands globally instead, but that can take up
      to an hour to appear.
-4. Deploy. In the logs you should see `Synced 7 commands to guild ...`
+4. Deploy. In the logs you should see `Synced 10 commands to guild ...`
    and `Logged in as GGA Profile Bot ...`.
 
 ## Running it on your own computer (testing)
@@ -146,11 +157,13 @@ discord.py 2.7.1, aiosqlite, and pytest installed.)
 - `src/availability.py` — playing-time parsing and conversion to
   Eastern Time.
 - `src/cogs/profiles.py` — the `/profile` command and form, the
-  persistent setup button, and `/post-profile-button`.
+  persistent setup button, `/post-profile-button`, and
+  `/setup-profile-for` (crew/admin sets up another member's profile).
 - `src/cogs/roster.py` — the `/roster` command for crew/admins.
 - `src/cogs/team_registration.py` — `/register-team`,
   `/unregister-team`, `/team-roster`, the persistent register button,
-  and `/post-team-button`.
+  `/post-team-button`, and `/register-team-for` /
+  `/unregister-team-for` (crew/admin acts for another member).
 - `src/cogs/welcome.py` — the welcome DM for new members.
 - `tests/` — pytest tests for the database, validation, availability
   conversion, and cog loading.

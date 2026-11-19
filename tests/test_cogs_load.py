@@ -36,10 +36,13 @@ def test_all_cogs_load_and_register_commands():
         "profile",
         "roster",
         "post-profile-button",
+        "setup-profile-for",
         "register-team",
         "unregister-team",
         "team-roster",
         "post-team-button",
+        "register-team-for",
+        "unregister-team-for",
     }
 
 

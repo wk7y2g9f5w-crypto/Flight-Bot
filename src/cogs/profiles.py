@@ -39,11 +39,29 @@ from src.validation import VALID_TOURS, format_handicap, parse_handicap
 
 
 class ProfileModal(discord.ui.Modal):
-    """The text fields of the profile form (timezone is not asked)."""
+    """The text fields of the profile form (timezone is not asked).
 
-    def __init__(self, *, tour: str, existing: dict | None):
-        super().__init__(title="Your GGA profile")
+    ``target`` is the member the form is being filled in for — None
+    means the person submitting it (the usual /profile flow); a
+    crew/admin filling in someone else's profile passes that member
+    here, and the save lands on their row, not the admin's.
+    """
+
+    def __init__(
+        self,
+        *,
+        tour: str,
+        existing: dict | None,
+        target: discord.Member | None = None,
+    ):
+        title = (
+            f"{target.display_name}'s GGA profile"[:45]
+            if target
+            else "Your GGA profile"
+        )
+        super().__init__(title=title)
         self.tour = tour
+        self.target = target
         self.username_input = discord.ui.TextInput(
             label="Golf+ Username",
             placeholder="e.g. Alumec",
@@ -94,10 +112,16 @@ class ProfileModal(discord.ui.Modal):
         eastern_display = format_eastern_display(
             days, format_clock(start_min), format_clock(end_min)
         )
+        member_id = self.target.id if self.target else interaction.user.id
+        member_name = (
+            self.target.display_name
+            if self.target
+            else interaction.user.display_name
+        )
         await db.upsert_profile(
             config.DB_PATH,
-            discord_id=interaction.user.id,
-            display_name=interaction.user.display_name,
+            discord_id=member_id,
+            display_name=member_name,
             golfplus_username=self.username_input.value.strip(),
             timezone="",
             available_time=eastern_display,
@@ -108,8 +132,17 @@ class ProfileModal(discord.ui.Modal):
             preferred_tour=self.tour,
         )
         embed = discord.Embed(
-            title="Your GGA profile is saved",
-            description="Run /profile anytime to update it.",
+            title=(
+                f"{member_name}'s GGA profile is saved"
+                if self.target
+                else "Your GGA profile is saved"
+            ),
+            description=(
+                f"Set by an admin — {member_name} can run /profile "
+                "anytime to update it."
+                if self.target
+                else "Run /profile anytime to update it."
+            ),
             colour=discord.Colour.green(),
         )
         embed.add_field(
@@ -164,11 +197,12 @@ class TourSelect(discord.ui.Select):
 class ProfileSetupView(discord.ui.View):
     """Ephemeral setup message: pick a tour, then open the details modal."""
 
-    def __init__(self, *, existing: dict | None):
+    def __init__(self, *, existing: dict | None, target=None):
         super().__init__(timeout=600)
         current = (existing or {}).get("preferred_tour")
         self.tour: str | None = current if current in VALID_TOURS else None
         self.existing = existing
+        self.target = target
         self.add_item(TourSelect(current))
 
     @discord.ui.button(
@@ -185,7 +219,9 @@ class ProfileSetupView(discord.ui.View):
             )
             return
         await interaction.response.send_modal(
-            ProfileModal(tour=self.tour, existing=self.existing)
+            ProfileModal(
+                tour=self.tour, existing=self.existing, target=self.target
+            )
         )
 
 
@@ -242,6 +278,40 @@ async def send_profile_setup(interaction: discord.Interaction) -> None:
     )
 
 
+async def send_profile_setup_for(
+    interaction: discord.Interaction, target: discord.Member
+) -> None:
+    """Same setup message as /profile, but for another member.
+
+    Sent ephemerally to the admin who ran /setup-profile-for; the
+    form is pre-filled from the target's profile and the save lands
+    on their row, not the admin's.
+    """
+    existing = await db.get_profile(config.DB_PATH, target.id)
+    message = (
+        f"Set up {target.display_name}'s GGA profile — pick their tour, "
+        "then fill in the details. This saves to their profile, not yours."
+    )
+    if (
+        existing
+        and existing.get("avail_start_min") is None
+        and existing.get("available_time")
+    ):
+        # Saved before structured times: the old free-text entry
+        # cannot be split into days + a window, so ask the admin to
+        # re-enter it instead of silently dropping it.
+        message += (
+            f"\n\nTheir current playing time is saved as "
+            f'"{existing["available_time"]}" — re-enter it below as '
+            "days + a time window (Eastern Time)."
+        )
+    await interaction.response.send_message(
+        message,
+        view=ProfileSetupView(existing=existing, target=target),
+        ephemeral=True,
+    )
+
+
 class ProfilesCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -252,6 +322,29 @@ class ProfilesCog(commands.Cog):
     )
     async def profile(self, interaction: discord.Interaction) -> None:
         await send_profile_setup(interaction)
+
+    @app_commands.command(
+        name="setup-profile-for",
+        description="Set up another member's GGA profile (crew/admin only).",
+    )
+    @app_commands.guild_only()
+    async def setup_profile_for(
+        self, interaction: discord.Interaction, member: discord.Member
+    ) -> None:
+        perms = interaction.user.guild_permissions  # type: ignore[union-attr]
+        if not (perms.administrator or perms.manage_guild):
+            await interaction.response.send_message(
+                "Only crew/admins can set up profiles for other members.",
+                ephemeral=True,
+            )
+            return
+        if member.bot:
+            await interaction.response.send_message(
+                "Bots don't need a GGA profile.",
+                ephemeral=True,
+            )
+            return
+        await send_profile_setup_for(interaction, member)
 
     @app_commands.command(
         name="post-profile-button",

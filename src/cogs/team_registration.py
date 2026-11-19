@@ -10,7 +10,9 @@ precedence). Re-running the command updates the registration.
 
 Commands: /register-team (the form), /unregister-team (pull out),
 /team-roster (crew/admin list + player count),
-/post-team-button (crew/admin posts the persistent button).
+/post-team-button (crew/admin posts the persistent button),
+/register-team-for and /unregister-team-for (crew/admin set up or
+pull out another member — same form, saved under their row).
 """
 import discord
 from discord import app_commands
@@ -29,10 +31,24 @@ MAX_ENTRIES = 20
 
 
 class TeamModal(discord.ui.Modal):
-    """The text fields of the team registration form."""
+    """The text fields of the team registration form.
 
-    def __init__(self, *, existing: dict | None):
-        super().__init__(title="Register for the Team League")
+    ``target`` is the member the form is being filled in for — None
+    means the person submitting it (the usual /register-team flow); a
+    crew/admin registering someone else passes that member here, and
+    the save lands on their row, not the admin's.
+    """
+
+    def __init__(
+        self, *, existing: dict | None, target: discord.Member | None = None
+    ):
+        title = (
+            f"Register {target.display_name} for the Team League"[:45]
+            if target
+            else "Register for the Team League"
+        )
+        super().__init__(title=title)
+        self.target = target
         self.username_input = discord.ui.TextInput(
             label="Golf+ Username",
             placeholder="e.g. Alumec",
@@ -83,10 +99,16 @@ class TeamModal(discord.ui.Modal):
         eastern_display = format_eastern_display(
             days, format_clock(start_min), format_clock(end_min)
         )
+        member_id = self.target.id if self.target else interaction.user.id
+        member_name = (
+            self.target.display_name
+            if self.target
+            else interaction.user.display_name
+        )
         await db.upsert_team_registration(
             config.DB_PATH,
-            discord_id=interaction.user.id,
-            display_name=interaction.user.display_name,
+            discord_id=member_id,
+            display_name=member_name,
             golfplus_username=self.username_input.value.strip(),
             available_time=eastern_display,
             avail_days=days,
@@ -95,9 +117,16 @@ class TeamModal(discord.ui.Modal):
             handicap=handicap,
         )
         embed = discord.Embed(
-            title="You're registered for the Team League",
+            title=(
+                f"{member_name} is registered for the Team League"
+                if self.target
+                else "You're registered for the Team League"
+            ),
             description=(
-                "Run /register-team again anytime to update it, "
+                f"Set by an admin — {member_name} can run /register-team "
+                "anytime to update it, or /unregister-team to pull out."
+                if self.target
+                else "Run /register-team again anytime to update it, "
                 "or /unregister-team to pull out."
             ),
             colour=discord.Colour.green(),
@@ -119,9 +148,10 @@ class TeamModal(discord.ui.Modal):
 class TeamSetupView(discord.ui.View):
     """Ephemeral setup message: tap the button to open the details modal."""
 
-    def __init__(self, *, existing: dict | None):
+    def __init__(self, *, existing: dict | None, target=None):
         super().__init__(timeout=600)
         self.existing = existing
+        self.target = target
 
     @discord.ui.button(
         label="Enter username, playing time & handicap",
@@ -131,7 +161,7 @@ class TeamSetupView(discord.ui.View):
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
         await interaction.response.send_modal(
-            TeamModal(existing=self.existing)
+            TeamModal(existing=self.existing, target=self.target)
         )
 
 
@@ -196,6 +226,46 @@ async def send_team_setup(interaction: discord.Interaction) -> None:
     )
 
 
+async def send_team_setup_for(
+    interaction: discord.Interaction, target: discord.Member
+) -> None:
+    """Same setup message as /register-team, but for another member.
+
+    Sent ephemerally to the admin who ran /register-team-for; the
+    form is pre-filled from the target's team registration (or their
+    profile) and the save lands on their row, not the admin's.
+    """
+    team_reg = await db.get_team_registration(
+        config.DB_PATH, target.id
+    )
+    existing = team_reg
+    message = (
+        f"Register {target.display_name} for the GGA Team League — fill in "
+        "their Golf+ username, playing time (Eastern Time), and handicap. "
+        "This saves to their registration, not yours."
+    )
+    if existing is None:
+        existing = await db.get_profile(config.DB_PATH, target.id)
+        if (
+            existing
+            and existing.get("avail_start_min") is None
+            and existing.get("available_time")
+        ):
+            # Profile saved before structured times: the old free-text
+            # entry cannot be split into days + a window, so ask the
+            # admin to re-enter it instead of silently dropping it.
+            message += (
+                f"\n\nTheir profile's playing time is saved as "
+                f'"{existing["available_time"]}" — re-enter it below as '
+                "days + a time window (Eastern Time)."
+            )
+    await interaction.response.send_message(
+        message,
+        view=TeamSetupView(existing=existing, target=target),
+        ephemeral=True,
+    )
+
+
 class TeamRegistrationCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -207,6 +277,60 @@ class TeamRegistrationCog(commands.Cog):
     @app_commands.guild_only()
     async def register_team(self, interaction: discord.Interaction) -> None:
         await send_team_setup(interaction)
+
+    @app_commands.command(
+        name="register-team-for",
+        description="Register another member for the Team League (crew/admin only).",
+    )
+    @app_commands.guild_only()
+    async def register_team_for(
+        self, interaction: discord.Interaction, member: discord.Member
+    ) -> None:
+        perms = interaction.user.guild_permissions  # type: ignore[union-attr]
+        if not (perms.administrator or perms.manage_guild):
+            await interaction.response.send_message(
+                "Only crew/admins can register other members for the team league.",
+                ephemeral=True,
+            )
+            return
+        if member.bot:
+            await interaction.response.send_message(
+                "Bots don't play in the Team League.",
+                ephemeral=True,
+            )
+            return
+        await send_team_setup_for(interaction, member)
+
+    @app_commands.command(
+        name="unregister-team-for",
+        description="Pull another member out of the Team League (crew/admin only).",
+    )
+    @app_commands.guild_only()
+    async def unregister_team_for(
+        self, interaction: discord.Interaction, member: discord.Member
+    ) -> None:
+        perms = interaction.user.guild_permissions  # type: ignore[union-attr]
+        if not (perms.administrator or perms.manage_guild):
+            await interaction.response.send_message(
+                "Only crew/admins can pull other members out of the team league.",
+                ephemeral=True,
+            )
+            return
+        existing = await db.get_team_registration(
+            config.DB_PATH, member.id
+        )
+        if existing is None:
+            await interaction.response.send_message(
+                f"{member.display_name} isn't registered for the team league.",
+                ephemeral=True,
+            )
+            return
+        await db.delete_team_registration(config.DB_PATH, member.id)
+        await interaction.response.send_message(
+            f"{member.display_name} is no longer registered for the team "
+            "league.",
+            ephemeral=True,
+        )
 
     @app_commands.command(
         name="unregister-team",
