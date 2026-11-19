@@ -398,10 +398,16 @@ def test_team_button_sends_setup_message(monkeypatch):
     async def fake_get_profile(db_path, discord_id):
         return None
 
+    async def fake_insert_bare(db_path, **kwargs):
+        return False
+
     monkeypatch.setattr(
         team_cog.db, "get_team_registration", fake_get_team_registration
     )
     monkeypatch.setattr(team_cog.db, "get_profile", fake_get_profile)
+    monkeypatch.setattr(
+        team_cog.db, "insert_team_registration_bare", fake_insert_bare
+    )
     interaction = _FakeInteraction()
     view = team_cog.TeamButtonView()
 

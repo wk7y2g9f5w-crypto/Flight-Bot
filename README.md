@@ -63,8 +63,11 @@ section below.
   Separate from `/roster`.
 - **`/post-team-button`** — crew/admins only. Posts a persistent
   **Register for Team** button in the channel where you run it, the
-  same as the profile button. Tapping it sends that member the same
-  setup form `/register-team` sends.
+  same as the profile button. Tapping it registers that member on the
+  spot under their Discord name — the form it opens is just for the
+  details (Golf+ username, playing time, handicap), and skipping it
+  still leaves them on the roster. Tapping it again later just opens
+  the form to update — it never wipes what they already entered.
 - **`/post-roster`** — admins only. Posts the public team roster in
   the channel where you run it: just Golf+ usernames, one per line,
   with the total count — no playing times, no handicaps — so every

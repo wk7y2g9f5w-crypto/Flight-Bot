@@ -302,6 +302,31 @@ async def upsert_team_registration(
         await conn.commit()
 
 
+async def insert_team_registration_bare(
+    path: str, *, discord_id: int, display_name: str
+) -> bool:
+    """Insert a bare team registration, if the member has none.
+
+    Used by the Register for Team button: tapping it puts the member
+    on the roster under their Discord name right away, whether or
+    not they fill in the form. INSERT OR IGNORE means an existing
+    registration is never overwritten — their details stay intact.
+    Returns True if a row was inserted.
+    """
+    now = datetime.now(dt_timezone.utc).isoformat()
+    async with aiosqlite.connect(path) as conn:
+        cur = await conn.execute(
+            """INSERT OR IGNORE INTO team_registrations
+                 (discord_id, display_name, golfplus_username,
+                  available_time, avail_days, avail_start_min,
+                  avail_end_min, handicap, updated_at)
+               VALUES (?, ?, '', '', '', NULL, NULL, NULL, ?)""",
+            (discord_id, display_name, now),
+        )
+        await conn.commit()
+    return cur.rowcount == 1
+
+
 async def get_team_registration(path: str, discord_id: int) -> dict | None:
     """Return one member's team registration, or None."""
     async with aiosqlite.connect(path) as conn:

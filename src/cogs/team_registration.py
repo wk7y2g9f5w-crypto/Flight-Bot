@@ -1,4 +1,4 @@
-"""/register-team — Team League registration, separate from /profile.
+""" /register-team — Team League registration, separate from /profile.
 
 Same form as /profile minus the tour (Golf+ username, days, playing
 window in Eastern Time, handicap), saved in its own table so the crew
@@ -7,6 +7,10 @@ the team does not create or change a member's profile, and a profile
 is not required to register — if one exists, the form is pre-filled
 from it (or from the member's existing team registration, which takes
 precedence). Re-running the command updates the registration.
+
+Tapping the persistent Register for Team button registers the member
+on the spot under their Discord name — the form that follows is just
+for the details, and skipping it still leaves them on the roster.
 
 Commands: /register-team (the form), /unregister-team (pull out),
 /team-roster (crew/admin list + player count),
@@ -231,8 +235,10 @@ class TeamButtonView(discord.ui.View):
     """Persistent "Register for Team" button for a channel message.
 
     timeout=None plus a fixed custom_id so the button keeps working
-    across bot restarts (re-registered in setup_hook). Tapping it sends
-    the member the same ephemeral setup message /register-team sends.
+    across bot restarts (re-registered in setup_hook). Tapping it
+    registers the member on the spot under their Discord name — the
+    form that follows is just for the details, and skipping it still
+    leaves them on the roster.
     """
 
     def __init__(self):
@@ -246,26 +252,53 @@ class TeamButtonView(discord.ui.View):
     async def open_setup(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
-        await send_team_setup(interaction)
+        # Instant registration: the tap itself puts them on the roster
+        # under their Discord name, whether or not they fill in the
+        # form. A member who is already registered is left untouched.
+        inserted = await db.insert_team_registration_bare(
+            config.DB_PATH,
+            discord_id=interaction.user.id,
+            display_name=interaction.user.display_name,
+        )
+        if inserted:
+            await refresh_roster_posts(
+                getattr(interaction, "client", None),
+                getattr(interaction, "guild_id", None),
+            )
+        await send_team_setup(interaction, just_registered=inserted)
 
 
-async def send_team_setup(interaction: discord.Interaction) -> None:
+async def send_team_setup(
+    interaction: discord.Interaction, *, just_registered: bool = False
+) -> None:
     """Send the ephemeral setup message (open-modal button).
 
     Shared by /register-team and the persistent register button, so both
     open exactly the same form. Prefills from the member's existing team
     registration if they have one, else from their profile.
+    ``just_registered`` is set by the button flow, where the tap itself
+    already put the member on the roster — the message says so, and the
+    form is just for the details.
     """
     team_reg = await db.get_team_registration(
         config.DB_PATH, interaction.user.id
     )
     existing = team_reg
-    message = (
-        "Register for the GGA Team League — fill in your Golf+ username, "
-        "playing time (Eastern Time), and handicap. You can run "
-        "/register-team again anytime to change it, or /unregister-team "
-        "to pull out."
-    )
+    if just_registered:
+        message = (
+            "You're on the team roster now under your Discord name. "
+            "Fill in the rest below if you want — your Golf+ username, "
+            "playing time (Eastern Time), and handicap — or close this "
+            "and you're done. You can run /register-team again anytime "
+            "to change it, or /unregister-team to pull out."
+        )
+    else:
+        message = (
+            "Register for the GGA Team League — fill in your Golf+ username, "
+            "playing time (Eastern Time), and handicap. You can run "
+            "/register-team again anytime to change it, or /unregister-team "
+            "to pull out."
+        )
     if existing is None:
         existing = await db.get_profile(config.DB_PATH, interaction.user.id)
         if (
