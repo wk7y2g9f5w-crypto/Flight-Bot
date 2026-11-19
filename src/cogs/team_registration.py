@@ -553,12 +553,15 @@ class TeamRegistrationCog(commands.Cog):
                 ephemeral=True,
             )
             return
-        # One live roster: take down any earlier posted copy first, so
-        # members never see two lists that disagree.
-        if self.bot is not None:
-            for channel_id, message_id in await db.list_roster_posts(
-                config.DB_PATH, interaction.guild_id
-            ):
+        # One live roster per channel: re-running in the same channel
+        # replaces that channel's copy, while rosters posted in other
+        # channels stay live.
+        for channel_id, message_id in await db.list_roster_posts(
+            config.DB_PATH, interaction.guild_id
+        ):
+            if channel_id != interaction.channel.id:
+                continue
+            if self.bot is not None:
                 try:
                     channel = self.bot.get_channel(channel_id)
                     if channel is None:
@@ -567,7 +570,12 @@ class TeamRegistrationCog(commands.Cog):
                     await message.delete()
                 except Exception:
                     pass
-        await db.clear_roster_posts(config.DB_PATH, interaction.guild_id)
+            await db.remove_roster_post(
+                config.DB_PATH,
+                guild_id=interaction.guild_id,
+                channel_id=channel_id,
+                message_id=message_id,
+            )
         embed = build_roster_embed(
             await db.list_team_registrations(config.DB_PATH)
         )
@@ -580,8 +588,9 @@ class TeamRegistrationCog(commands.Cog):
         )
         await interaction.response.send_message(
             "Team roster posted in this channel — it updates itself when "
-            "players register or unregister. Run /post-roster again to "
-            "move it to another channel.",
+            "players register or unregister. Run /post-roster in another "
+            "channel to post another copy; running it again here replaces "
+            "this one.",
             ephemeral=True,
         )
 

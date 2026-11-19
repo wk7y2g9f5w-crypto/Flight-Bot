@@ -58,22 +58,6 @@ def test_roster_posts_round_trip(db_path):
     assert run(db.list_roster_posts(db_path, 999)) == []
 
 
-def test_roster_posts_clear(db_path):
-    run(db.init_db(db_path))
-    run(
-        db.add_roster_post(
-            db_path, guild_id=999, channel_id=777, message_id=1000
-        )
-    )
-    run(
-        db.add_roster_post(
-            db_path, guild_id=999, channel_id=778, message_id=1001
-        )
-    )
-    run(db.clear_roster_posts(db_path, 999))
-    assert run(db.list_roster_posts(db_path, 999)) == []
-
-
 # --- embed ---
 
 
@@ -228,8 +212,9 @@ def test_post_roster_posts_for_admin_and_records(db_path, monkeypatch):
     assert interaction.response.sent == [
         (
             "Team roster posted in this channel — it updates itself when "
-            "players register or unregister. Run /post-roster again to "
-            "move it to another channel.",
+            "players register or unregister. Run /post-roster in another "
+            "channel to post another copy; running it again here replaces "
+            "this one.",
             {"ephemeral": True},
         )
     ]
@@ -254,7 +239,7 @@ def test_post_roster_refuses_non_admin(db_path, monkeypatch):
     ]
 
 
-def test_post_roster_replaces_old_post(db_path, monkeypatch):
+def test_post_roster_replaces_same_channel_copy(db_path, monkeypatch):
     monkeypatch.setattr(team_cog.config, "DB_PATH", db_path)
     run(db.init_db(db_path))
     interaction = _FakeInteraction(perms=_FakePerms(manage_guild=True))
@@ -270,9 +255,38 @@ def test_post_roster_replaces_old_post(db_path, monkeypatch):
     asyncio.run(_run())
     old_message = interaction.channel.messages[1000]
     assert old_message.deleted is True
-    # Only the fresh post is recorded — no duplicate live rosters.
+    # Only the fresh post is recorded for this channel — no duplicate
+    # live rosters in one channel.
     assert run(db.list_roster_posts(db_path, 999)) == [(777, 1001)]
     assert len(interaction.channel.sent) == 2
+
+
+def test_post_roster_allows_multiple_channels(db_path, monkeypatch):
+    monkeypatch.setattr(team_cog.config, "DB_PATH", db_path)
+    run(db.init_db(db_path))
+    register(db_path, 1, "Amy", "Alumec")
+    first = _FakeInteraction(perms=_FakePerms(manage_guild=True))
+    second = _FakeInteraction(perms=_FakePerms(manage_guild=True))
+    second.channel = _FakeChannel(channel_id=778)
+    bot = _FakeBot([first.channel, second.channel])
+    cog = team_cog.TeamRegistrationCog(bot=bot)
+
+    async def _run(interaction):
+        await team_cog.TeamRegistrationCog.post_roster.callback(
+            cog, interaction
+        )
+
+    asyncio.run(_run(first))
+    asyncio.run(_run(second))
+    # Both copies are live — neither was taken down by the other.
+    assert sorted(run(db.list_roster_posts(db_path, 999))) == [
+        (777, 1000),
+        (778, 1000),
+    ]
+    assert first.channel.messages[1000].deleted is False
+    assert second.channel.messages[1000].deleted is False
+    assert first.channel.sent[0]["embed"].description == "Alumec"
+    assert second.channel.sent[0]["embed"].description == "Alumec"
 
 
 # --- live updating ---

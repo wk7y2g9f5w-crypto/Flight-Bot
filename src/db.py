@@ -396,13 +396,3 @@ async def remove_roster_post(
             (guild_id, channel_id, message_id),
         )
         await conn.commit()
-
-
-async def clear_roster_posts(path: str, guild_id: int) -> None:
-    """Forget every posted roster in a guild (re-posting fresh)."""
-    async with aiosqlite.connect(path) as conn:
-        await conn.execute(
-            "DELETE FROM roster_posts WHERE guild_id = ?",
-            (guild_id,),
-        )
-        await conn.commit()

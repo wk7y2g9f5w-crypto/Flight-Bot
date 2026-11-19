@@ -72,10 +72,10 @@ section below.
   the channel where you run it: just Golf+ usernames, one per line,
   with the total count — no playing times, no handicaps — so every
   member can see who's signed up. It updates itself whenever someone
-  registers or unregisters. Run it again to move the roster to
-  another channel (the old copy is taken down so there's never two
-  lists). If the posted message is ever deleted, run it again to post
-  a fresh one.
+  registers or unregisters, and you can post as many copies as you
+  want — run it in another channel for another live copy. Running it
+  again in the same channel replaces that channel's copy. If a posted
+  message is ever deleted, run it again to post a fresh one.
 - **Welcome DM** — when someone new joins the server, the bot sends
   them a private message inviting them to set their profile with
   `/profile`. If their DMs are closed, the bot just skips them quietly.
