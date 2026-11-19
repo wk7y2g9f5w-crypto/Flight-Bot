@@ -65,6 +65,14 @@ section below.
   **Register for Team** button in the channel where you run it, the
   same as the profile button. Tapping it sends that member the same
   setup form `/register-team` sends.
+- **`/post-roster`** — admins only. Posts the public team roster in
+  the channel where you run it: just Golf+ usernames, one per line,
+  with the total count — no playing times, no handicaps — so every
+  member can see who's signed up. It updates itself whenever someone
+  registers or unregisters. Run it again to move the roster to
+  another channel (the old copy is taken down so there's never two
+  lists). If the posted message is ever deleted, run it again to post
+  a fresh one.
 - **Welcome DM** — when someone new joins the server, the bot sends
   them a private message inviting them to set their profile with
   `/profile`. If their DMs are closed, the bot just skips them quietly.
@@ -125,7 +133,7 @@ on the Always Free tier instead: 1 vCPU / 1 GB RAM, $0 forever.
      server name, Copy Server ID. You can leave it blank and the bot
      will register the commands globally instead, but that can take up
      to an hour to appear.
-4. Deploy. In the logs you should see `Synced 10 commands to guild ...`
+4. Deploy. In the logs you should see `Synced 11 commands to guild ...`
    and `Logged in as GGA Profile Bot ...`.
 
 ## Running it on your own computer (testing)
@@ -151,8 +159,8 @@ discord.py 2.7.1, aiosqlite, and pytest installed.)
 
 - `src/bot.py` — starts the bot, loads the cogs, registers the commands.
 - `src/config.py` — reads settings from the environment.
-- `src/db.py` — the SQLite storage (two tables: `member_profiles` and
-  `team_registrations`).
+- `src/db.py` — the SQLite storage (three tables: `member_profiles`,
+  `team_registrations`, and `roster_posts`).
 - `src/validation.py` — handicap and tour checks.
 - `src/availability.py` — playing-time parsing and conversion to
   Eastern Time.
@@ -162,8 +170,9 @@ discord.py 2.7.1, aiosqlite, and pytest installed.)
 - `src/cogs/roster.py` — the `/roster` command for crew/admins.
 - `src/cogs/team_registration.py` — `/register-team`,
   `/unregister-team`, `/team-roster`, the persistent register button,
-  `/post-team-button`, and `/register-team-for` /
-  `/unregister-team-for` (crew/admin acts for another member).
+  `/post-team-button`, `/post-roster` (public live-updating roster),
+  and `/register-team-for` / `/unregister-team-for` (crew/admin acts
+  for another member).
 - `src/cogs/welcome.py` — the welcome DM for new members.
 - `tests/` — pytest tests for the database, validation, availability
   conversion, and cog loading.

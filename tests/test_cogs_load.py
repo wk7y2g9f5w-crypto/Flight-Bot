@@ -41,6 +41,7 @@ def test_all_cogs_load_and_register_commands():
         "unregister-team",
         "team-roster",
         "post-team-button",
+        "post-roster",
         "register-team-for",
         "unregister-team-for",
     }

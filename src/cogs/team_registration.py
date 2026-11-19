@@ -12,7 +12,9 @@ Commands: /register-team (the form), /unregister-team (pull out),
 /team-roster (crew/admin list + player count),
 /post-team-button (crew/admin posts the persistent button),
 /register-team-for and /unregister-team-for (crew/admin set up or
-pull out another member — same form, saved under their row).
+pull out another member — same form, saved under their row),
+/post-roster (admin posts the public Golf+ username roster, which
+updates itself whenever registrations change).
 """
 import discord
 from discord import app_commands
@@ -28,6 +30,60 @@ from src.availability import (
 from src.validation import format_handicap, parse_handicap
 
 MAX_ENTRIES = 20
+
+
+def build_roster_embed(registrations):
+    """Public roster embed: Golf+ usernames only, one per line.
+
+    A member without a Golf+ username shows under their Discord
+    display name instead, so nobody who registered is missing from
+    the list. Sorted by the name shown.
+    """
+    names = sorted(
+        (r["golfplus_username"] or r["display_name"] for r in registrations),
+        key=str.lower,
+    )
+    embed = discord.Embed(
+        title=f"Team League roster — {len(names)} registered",
+        colour=discord.Colour.green(),
+    )
+    embed.description = (
+        "\n".join(names)
+        if names
+        else "Nobody has registered for the team league yet."
+    )
+    return embed
+
+
+async def refresh_roster_posts(bot, guild_id):
+    """Rebuild every posted public roster for a guild, in place.
+
+    Called whenever a registration changes. A post whose message is
+    gone (deleted, or the bot lost access) is forgotten so it is not
+    retried on every change.
+    """
+    if bot is None or guild_id is None:
+        return
+    posts = await db.list_roster_posts(config.DB_PATH, guild_id)
+    if not posts:
+        return
+    embed = build_roster_embed(
+        await db.list_team_registrations(config.DB_PATH)
+    )
+    for channel_id, message_id in posts:
+        try:
+            channel = bot.get_channel(channel_id)
+            if channel is None:
+                channel = await bot.fetch_channel(channel_id)
+            message = await channel.fetch_message(message_id)
+            await message.edit(embed=embed)
+        except Exception:
+            await db.remove_roster_post(
+                config.DB_PATH,
+                guild_id=guild_id,
+                channel_id=channel_id,
+                message_id=message_id,
+            )
 
 
 class TeamModal(discord.ui.Modal):
@@ -115,6 +171,12 @@ class TeamModal(discord.ui.Modal):
             avail_start_min=start_min,
             avail_end_min=end_min,
             handicap=handicap,
+        )
+        # A new or updated registration refreshes the posted public
+        # roster, if an admin has posted one.
+        await refresh_roster_posts(
+            getattr(interaction, "client", None),
+            getattr(interaction, "guild_id", None),
         )
         embed = discord.Embed(
             title=(
@@ -326,6 +388,9 @@ class TeamRegistrationCog(commands.Cog):
             )
             return
         await db.delete_team_registration(config.DB_PATH, member.id)
+        await refresh_roster_posts(
+            self.bot, getattr(interaction, "guild_id", None)
+        )
         await interaction.response.send_message(
             f"{member.display_name} is no longer registered for the team "
             "league.",
@@ -348,6 +413,9 @@ class TeamRegistrationCog(commands.Cog):
             )
             return
         await db.delete_team_registration(config.DB_PATH, interaction.user.id)
+        await refresh_roster_posts(
+            self.bot, getattr(interaction, "guild_id", None)
+        )
         await interaction.response.send_message(
             "You're no longer registered for the team league. "
             "Run /register-team anytime to sign back up.",
@@ -428,6 +496,59 @@ class TeamRegistrationCog(commands.Cog):
         await interaction.channel.send(embed=embed, view=TeamButtonView())
         await interaction.response.send_message(
             "Team button posted in this channel.",
+            ephemeral=True,
+        )
+
+    @app_commands.command(
+        name="post-roster",
+        description="Post the public team roster — Golf+ usernames only — in this channel (admin only).",
+    )
+    @app_commands.guild_only()
+    async def post_roster(
+        self, interaction: discord.Interaction
+    ) -> None:
+        perms = interaction.user.guild_permissions  # type: ignore[union-attr]
+        if not (perms.administrator or perms.manage_guild):
+            await interaction.response.send_message(
+                "Only admins can post the team roster.",
+                ephemeral=True,
+            )
+            return
+        if interaction.channel is None or interaction.guild_id is None:
+            await interaction.response.send_message(
+                "Could not find this channel — try again from a server channel.",
+                ephemeral=True,
+            )
+            return
+        # One live roster: take down any earlier posted copy first, so
+        # members never see two lists that disagree.
+        if self.bot is not None:
+            for channel_id, message_id in await db.list_roster_posts(
+                config.DB_PATH, interaction.guild_id
+            ):
+                try:
+                    channel = self.bot.get_channel(channel_id)
+                    if channel is None:
+                        channel = await self.bot.fetch_channel(channel_id)
+                    message = await channel.fetch_message(message_id)
+                    await message.delete()
+                except Exception:
+                    pass
+        await db.clear_roster_posts(config.DB_PATH, interaction.guild_id)
+        embed = build_roster_embed(
+            await db.list_team_registrations(config.DB_PATH)
+        )
+        posted = await interaction.channel.send(embed=embed)
+        await db.add_roster_post(
+            config.DB_PATH,
+            guild_id=interaction.guild_id,
+            channel_id=posted.channel.id,
+            message_id=posted.id,
+        )
+        await interaction.response.send_message(
+            "Team roster posted in this channel — it updates itself when "
+            "players register or unregister. Run /post-roster again to "
+            "move it to another channel.",
             ephemeral=True,
         )
 

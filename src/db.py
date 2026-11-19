@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS team_registrations(
   handicap REAL,
   updated_at TEXT NOT NULL
 );
+
+-- Posted public rosters: where /post-roster put the Golf+ username
+-- list, so it can be edited in place when players register or
+-- unregister (live updating). One row per posted message.
+CREATE TABLE IF NOT EXISTS roster_posts(
+  guild_id INTEGER NOT NULL,
+  channel_id INTEGER NOT NULL,
+  message_id INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, channel_id, message_id)
+);
 """
 
 
@@ -320,5 +330,54 @@ async def delete_team_registration(path: str, discord_id: int) -> None:
         await conn.execute(
             "DELETE FROM team_registrations WHERE discord_id = ?",
             (discord_id,),
+        )
+        await conn.commit()
+
+
+async def add_roster_post(
+    path: str, *, guild_id: int, channel_id: int, message_id: int
+) -> None:
+    """Record a posted public roster message for live updating."""
+    async with aiosqlite.connect(path) as conn:
+        await conn.execute(
+            """INSERT OR IGNORE INTO roster_posts
+                 (guild_id, channel_id, message_id)
+               VALUES (?, ?, ?)""",
+            (guild_id, channel_id, message_id),
+        )
+        await conn.commit()
+
+
+async def list_roster_posts(path: str, guild_id: int) -> list[tuple[int, int]]:
+    """Return (channel_id, message_id) for every posted roster in a guild."""
+    async with aiosqlite.connect(path) as conn:
+        async with conn.execute(
+            "SELECT channel_id, message_id FROM roster_posts "
+            "WHERE guild_id = ?",
+            (guild_id,),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [(row[0], row[1]) for row in rows]
+
+
+async def remove_roster_post(
+    path: str, *, guild_id: int, channel_id: int, message_id: int
+) -> None:
+    """Forget one posted roster (its message is gone or uneditable)."""
+    async with aiosqlite.connect(path) as conn:
+        await conn.execute(
+            """DELETE FROM roster_posts
+               WHERE guild_id = ? AND channel_id = ? AND message_id = ?""",
+            (guild_id, channel_id, message_id),
+        )
+        await conn.commit()
+
+
+async def clear_roster_posts(path: str, guild_id: int) -> None:
+    """Forget every posted roster in a guild (re-posting fresh)."""
+    async with aiosqlite.connect(path) as conn:
+        await conn.execute(
+            "DELETE FROM roster_posts WHERE guild_id = ?",
+            (guild_id,),
         )
         await conn.commit()
