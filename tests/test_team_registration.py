@@ -380,6 +380,58 @@ def test_team_roster_refuses_non_admin(db_path, monkeypatch):
     ]
 
 
+def test_team_roster_over_20_has_show_more_button(db_path, monkeypatch):
+    monkeypatch.setattr(team_cog.config, "DB_PATH", db_path)
+    run(db.init_db(db_path))
+    for discord_id in range(1, 26):
+        run(
+            db.upsert_team_registration(
+                db_path,
+                discord_id=discord_id,
+                display_name=f"Player {discord_id:02d}",
+                available_time="Evenings",
+                handicap=8.0,
+            )
+        )
+    cog = team_cog.TeamRegistrationCog(bot=None)
+    interaction = _FakeInteraction(perms=_FakePerms(manage_guild=True))
+    asyncio.run(
+        team_cog.TeamRegistrationCog.team_roster.callback(cog, interaction)
+    )
+    assert len(interaction.response.sent) == 1
+    _, kwargs = interaction.response.sent[0]
+    assert kwargs["ephemeral"] is True
+    assert kwargs["embed"].title == "Team League roster — 25 registered"
+    assert len(kwargs["embed"].description.splitlines()) == 20
+    assert "Player 25" not in kwargs["embed"].description
+    assert kwargs["embed"].footer.text == "Showing the first 20 of 25."
+    view = kwargs["view"]
+    assert isinstance(view, team_cog.ExpandableListView)
+    assert view.toggle.label == "Show more (5 more)"
+
+
+def test_team_roster_short_list_has_no_button(db_path, monkeypatch):
+    monkeypatch.setattr(team_cog.config, "DB_PATH", db_path)
+    run(db.init_db(db_path))
+    run(
+        db.upsert_team_registration(
+            db_path,
+            discord_id=1,
+            display_name="Amy",
+            available_time="Evenings",
+            handicap=8.0,
+        )
+    )
+    cog = team_cog.TeamRegistrationCog(bot=None)
+    interaction = _FakeInteraction(perms=_FakePerms(manage_guild=True))
+    asyncio.run(
+        team_cog.TeamRegistrationCog.team_roster.callback(cog, interaction)
+    )
+    _, kwargs = interaction.response.sent[0]
+    assert kwargs["view"] is None
+    assert kwargs["embed"].footer.text is None
+
+
 def test_team_button_view_is_persistent():
     view = team_cog.TeamButtonView()
     assert view.timeout is None

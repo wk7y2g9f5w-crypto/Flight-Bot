@@ -31,9 +31,8 @@ from src.availability import (
     parse_window,
     prefill_window,
 )
+from src.expandable_list import COLLAPSED_LIMIT, ExpandableListView
 from src.validation import format_handicap, parse_handicap
-
-MAX_ENTRIES = 20
 
 
 def build_roster_embed(registrations):
@@ -472,27 +471,36 @@ class TeamRegistrationCog(commands.Cog):
             )
             return
         registrations = await db.list_team_registrations(config.DB_PATH)
-        embed = discord.Embed(
-            title=f"Team League roster — {len(registrations)} registered",
-            colour=discord.Colour.green(),
-        )
         if not registrations:
-            embed.description = "Nobody has registered for the team league yet."
+            embed = discord.Embed(
+                title="Team League roster — 0 registered",
+                description="Nobody has registered for the team league yet.",
+                colour=discord.Colour.green(),
+            )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
-        lines = []
-        for r in registrations[:MAX_ENTRIES]:
-            lines.append(
-                f"**{r['display_name']}** — Golf+ {r['golfplus_username'] or '—'} | "
-                f"{r['available_time'] or '—'} | "
-                f"HCP {format_handicap(r['handicap'])}"
-            )
-        embed.description = "\n".join(lines)
-        if len(registrations) > MAX_ENTRIES:
-            embed.set_footer(
-                text=f"Showing the first {MAX_ENTRIES} of {len(registrations)}."
-            )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        lines = [
+            f"**{r['display_name']}** — Golf+ {r['golfplus_username'] or '—'} | "
+            f"{r['available_time'] or '—'} | "
+            f"HCP {format_handicap(r['handicap'])}"
+            for r in registrations
+        ]
+        view = ExpandableListView(
+            title=f"Team League roster — {len(registrations)} registered",
+            lines=lines,
+            invoker_id=interaction.user.id,
+            colour=discord.Colour.green(),
+            collapsed_footer=(
+                f"Showing the first {COLLAPSED_LIMIT} "
+                f"of {len(registrations)}."
+            ),
+            expanded_footer=f"Showing all {len(registrations)}.",
+        )
+        await interaction.response.send_message(
+            embed=view.build_embed(),
+            view=view if view.has_expand else None,
+            ephemeral=True,
+        )
 
     @app_commands.command(
         name="post-team-button",

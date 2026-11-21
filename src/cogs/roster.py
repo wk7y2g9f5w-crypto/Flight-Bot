@@ -2,16 +2,16 @@
 
 Restricted to members with Administrator or Manage Server permission
 (no hardcoded role names — GGA's role names are unknown). Replies
-ephemerally and caps the list at 20 entries.
+ephemerally. Shows the first 20 entries with a "Show more" button
+that expands the same message to the full list.
 """
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from src import config, db
+from src.expandable_list import COLLAPSED_LIMIT, ExpandableListView
 from src.validation import format_handicap
-
-MAX_ENTRIES = 20
 
 
 class RosterCog(commands.Cog):
@@ -55,25 +55,28 @@ class RosterCog(commands.Cog):
                 ephemeral=True,
             )
             return
-        shown = profiles[:MAX_ENTRIES]
-        lines = []
-        for p in shown:
-            lines.append(
-                f"**{p['display_name']}** — Golf+ {p['golfplus_username'] or '—'} | "
-                f"{p['available_time'] or '—'} | "
-                f"HCP {format_handicap(p['handicap'])} | {p['preferred_tour']}"
-            )
-        embed = discord.Embed(
+        lines = [
+            f"**{p['display_name']}** — Golf+ {p['golfplus_username'] or '—'} | "
+            f"{p['available_time'] or '—'} | "
+            f"HCP {format_handicap(p['handicap'])} | {p['preferred_tour']}"
+            for p in profiles
+        ]
+        view = ExpandableListView(
             title=f"GGA member roster ({len(profiles)} saved)",
-            description="\n".join(lines),
+            lines=lines,
+            invoker_id=interaction.user.id,
             colour=discord.Colour.blue(),
-        )
-        if len(profiles) > MAX_ENTRIES:
-            embed.set_footer(
-                text=f"Showing the first {MAX_ENTRIES} of {len(profiles)} — "
+            collapsed_footer=(
+                f"Showing the first {COLLAPSED_LIMIT} of {len(profiles)} — "
                 "narrow it down with the tour filter."
-            )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            ),
+            expanded_footer=f"Showing all {len(profiles)}.",
+        )
+        await interaction.response.send_message(
+            embed=view.build_embed(),
+            view=view if view.has_expand else None,
+            ephemeral=True,
+        )
 
 
 async def setup(bot: commands.Bot) -> None:

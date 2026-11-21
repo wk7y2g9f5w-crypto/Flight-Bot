@@ -44,6 +44,8 @@ section below.
   (name, Golf+ username, playing time in Eastern Time,
   handicap, tour). You can narrow it down by tour. Only
   people with Administrator or Manage Server permission can use it.
+  Shows the first 20 with a **Show more** button that expands the
+  same message to the full list (Show less collapses it back).
 - **`/register-team`** — opens the Team League form: the same fields
   as `/profile` minus the tour (Golf+ username, days, playing window in
   Eastern Time, handicap), saved separately in its own table so the
@@ -60,7 +62,9 @@ section below.
   out of the Team League.
 - **`/team-roster`** — crew/admins only. Lists everyone registered
   for the Team League, with the total player count in the title.
-  Separate from `/roster`.
+  Separate from `/roster`. Shows the first 20 with a **Show more**
+  button that expands the same message to the full list (Show less
+  collapses it back).
 - **`/post-team-button`** — crew/admins only. Posts a persistent
   **Register for Team** button in the channel where you run it, the
   same as the profile button. Tapping it registers that member on the
